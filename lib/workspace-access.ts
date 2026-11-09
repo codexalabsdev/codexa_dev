@@ -40,7 +40,8 @@ export function hasWorkspaceAccess(permissions: string[], slug: string): boolean
 }
 
 export function normalizeWorkspaceRoleName(name: string): string {
-  return name.trim().toLocaleLowerCase('pt-BR')
+  const normalized = name.trim().toLocaleLowerCase('pt-BR')
+  return normalized === 'administrador' ? 'admin' : normalized
 }
 
 export type WorkspacePermissionOverride = {

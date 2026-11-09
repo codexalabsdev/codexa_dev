@@ -38,10 +38,11 @@ export function CrmWorkspace({ initialModule = 'leads', permissions = [] }: { in
     setLoading(true)
     setError('')
     const supabase = createClient()
+    const { data: userData } = await supabase.auth.getUser()
     const [leadResult, clientResult, messageResult] = await Promise.all([
-      supabase.from('leads').select('id,name,contact_name,email,phone,status,priority,source,created_at').order('created_at', { ascending: false }),
-      supabase.from('clients').select('id,legal_name,trade_name,email,phone,status,entry_date').order('created_at', { ascending: false }),
-      supabase.from('messages').select('id,sender,subject,content,channel,status,priority,received_at').order('received_at', { ascending: false }),
+    module === 'leads' ? supabase.from('leads').select('id,name,contact_name,email,phone,status,priority,source,created_at').order('created_at', { ascending: false }) : Promise.resolve({ data: [], error: null }),
+    module === 'clients' ? supabase.from('clients').select('id,legal_name,trade_name,email,phone,status,entry_date').order('created_at', { ascending: false }) : Promise.resolve({ data: [], error: null }),
+    module === 'messages' ? supabase.from('messages').select('id,sender,subject,content,channel,status,priority,received_at').eq('responsible_id', userData.user?.id ?? '').order('received_at', { ascending: false }) : Promise.resolve({ data: [], error: null }),
     ])
     if (leadResult.error || clientResult.error || messageResult.error) setError('Não foi possível carregar os registros. Verifique sua permissão e sessão.')
     setLeads((leadResult.data ?? []) as Lead[])
@@ -50,7 +51,7 @@ export function CrmWorkspace({ initialModule = 'leads', permissions = [] }: { in
     setLoading(false)
   }
 
-  useEffect(() => { void loadData() }, [])
+  useEffect(() => { void loadData() }, [module])
 
   const filtered = useMemo(() => {
     const term = query.toLowerCase()
