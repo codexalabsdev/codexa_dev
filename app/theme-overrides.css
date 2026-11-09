@@ -133,6 +133,12 @@
   color: var(--workspace-muted, var(--muted-foreground)) !important;
 }
 
+/* Tabs, module panels and cards use the dedicated border setting, not the primary text color. */
+.workspace-shell [class*='border-[var(--primary)]']:not(.workspace-nav-active),
+.workspace-shell [class*='border-blue-']:not(.workspace-nav-active) {
+  border-color: var(--border-default, var(--workspace-border)) !important;
+}
+
 .workspace-shell :focus-visible {
   outline: 2px solid var(--interactive-focus, var(--ring));
   outline-offset: 2px;

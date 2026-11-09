@@ -179,6 +179,7 @@ export function applyWorkspaceAppearance(appearance: WorkspaceAppearance): void 
   root.style.setProperty('--button-radius', `${appearance.button_radius}rem`)
   root.style.setProperty('--card-radius', `${appearance.card_radius}rem`)
   root.style.setProperty('--shadow-strength', `${appearance.shadow_strength}%`)
+  root.style.setProperty('--workspace-shadow-color', '#000000')
   root.style.setProperty('--background', background)
   root.style.setProperty('--card', surface)
   root.style.setProperty('--popover', isLight ? '#ffffff' : surface)
