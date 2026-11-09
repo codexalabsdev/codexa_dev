@@ -117,6 +117,15 @@ function messageText(message: UIMessage): string {
   return message.parts.flatMap((part) => part.type === 'text' ? [part.text] : []).join('\n').trim()
 }
 
+function normalizeConversationMessages(messages: AssistantUIMessage[]): AssistantUIMessage[] {
+  const latestUserIndex = messages.reduce((latest, message, index) => message.role === 'user' ? index : latest, -1)
+  return messages.filter((message, index) => {
+    if (message.role !== 'user') return true
+    if (index === latestUserIndex) return true
+    return messages[index + 1]?.role === 'assistant'
+  })
+}
+
 async function summarizeConversation({
   actor,
   conversationId,
@@ -339,6 +348,7 @@ export async function POST(request: Request) {
         .filter((message): message is AssistantUIMessage => Boolean(message))
     }
 
+    uiMessages = normalizeConversationMessages(uiMessages)
     const recentQuestions = uiMessages.filter((message) => message.role === 'user').slice(-3).map(messageText).join('\n').slice(-1000)
     const knowledgeSources: AssistantKnowledgeEntry[] = []
     let knowledgeContext = ''

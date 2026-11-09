@@ -21,7 +21,7 @@ import { UserAvatar } from '@/components/user-avatar'
 import { createClient } from '@/lib/supabase/client'
 import { hasWorkspaceAccess } from '@/lib/workspace-access'
 import { workspaceLabel } from '@/lib/workspace-modules'
-import { applyWorkspaceAppearance, applyWorkspaceTheme, defaultAppearance, getWorkspaceThemePreference, type WorkspaceAppearance } from '@/lib/workspace-theme'
+import { applyWorkspaceAppearance, defaultAppearance, type WorkspaceAppearance } from '@/lib/workspace-theme'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChartLine, faUserPlus, faUsers, faAddressBook, faFileSignature, faFileContract, faDiagramProject, faListCheck, faCodePullRequest, faHeadset, faServer, faPuzzlePiece, faLayerGroup, faKey, faArrowTrendUp, faArrowTrendDown, faChartPie, faUserShield, faUserGear, faShieldHalved, faClockRotateLeft, faUserCircle, faPalette, faGear, faMedal, faTrophy, faFolderOpen, faSliders } from '@fortawesome/free-solid-svg-icons'
 import {
@@ -136,7 +136,7 @@ const toneClasses: Record<string, string> = {
 type WorkspaceNotification = { id: string; message: string; notification_type: string; entity_type?: string | null; entity_id?: string | null; link_path?: string | null; read_at: string | null; created_at: string }
 type SearchItem = { label: string; slug: string; group: string }
 type DashboardRankingMember = { id: string; full_name: string; role_name: string; xp: number; level: number; milestone_name?: string }
-type DashboardData = { team: number; clients: number; projects: number; tickets: number; contracts: number; messages: number; ranking: DashboardRankingMember[] }
+type DashboardData = { team: number; leads: number; clients: number; projects: number; tickets: number; contracts: number; messages: number; openReceivables: number; overdueReceivables: number; receivedThisMonth: number; ranking: DashboardRankingMember[] }
 
 function DashboardContent({ initialSection = 'Dashboard', page, permissions, profileName = '' }: { initialSection?: string; page?: ReactNode; permissions: string[]; profileName?: string }) {
   const router = useRouter()
@@ -154,7 +154,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
   const [notificationsLoading, setNotificationsLoading] = useState(false)
   const [notificationsError, setNotificationsError] = useState('')
   const [actionableNotificationIds, setActionableNotificationIds] = useState<string[]>([])
-  const [dashboardData, setDashboardData] = useState<DashboardData>({ team: 0, clients: 0, projects: 0, tickets: 0, contracts: 0, messages: 0, ranking: [] })
+  const [dashboardData, setDashboardData] = useState<DashboardData>({ team: 0, leads: 0, clients: 0, projects: 0, tickets: 0, contracts: 0, messages: 0, openReceivables: 0, overdueReceivables: 0, receivedThisMonth: 0, ranking: [] })
   const [profileAvatarUrl, setProfileAvatarUrl] = useState('')
   const [profileNickname, setProfileNickname] = useState('')
   const searchInput = useRef<HTMLInputElement>(null)
@@ -181,23 +181,24 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
 
   useEffect(() => {
     let active = true
+    let loadedAppearance: WorkspaceAppearance = defaultAppearance
     const loadAppearance = async () => {
       const supabase = createClient()
-      const { data: authData } = await supabase.auth.getUser()
-      if (!authData.user) return
+      const { data: authData, error: authError } = await supabase.auth.getUser()
+      if (authError || !authData.user) return
       const { data, error } = await supabase
         .from('user_preferences')
-        .select('theme,primary_color,secondary_color,tertiary_color,background_color,surface_color,sidebar_color,header_color,text_color,muted_text_color,border_color,focus_color,font_size_base,heading_scale,font_weight,line_height,letter_spacing,button_radius,card_radius,shadow_strength,appearance_palette,accent_color,font_family,radius_scale,contrast_mode,motion_mode,navigation_collapsed,table_density')
+        .select('theme,primary_color,secondary_color,tertiary_color,background_color,surface_color,sidebar_color,header_color,text_color,muted_text_color,border_color,focus_color,font_size_base,heading_scale,font_weight,line_height,letter_spacing,button_radius,card_radius,shadow_strength,appearance_palette,accent_color,font_family,radius_scale,contrast_mode,motion_mode')
         .eq('user_id', authData.user.id)
         .maybeSingle()
       if (!active || error) return
-      if (data) applyWorkspaceAppearance({ ...defaultAppearance, ...(data as Partial<WorkspaceAppearance>) })
-      else applyWorkspaceTheme(getWorkspaceThemePreference())
+      loadedAppearance = { ...defaultAppearance, ...(data as Partial<WorkspaceAppearance> | null) }
+      applyWorkspaceAppearance(loadedAppearance)
     }
     void loadAppearance()
     const colorScheme = window.matchMedia('(prefers-color-scheme: light)')
     const onSystemThemeChange = () => {
-      if (getWorkspaceThemePreference() === 'system') applyWorkspaceTheme('system')
+      if (loadedAppearance.theme === 'system') applyWorkspaceAppearance(loadedAppearance)
     }
     colorScheme.addEventListener('change', onSystemThemeChange)
     return () => { active = false; colorScheme.removeEventListener('change', onSystemThemeChange) }
@@ -207,8 +208,8 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
     if (activeSection !== 'Dashboard') return
     void fetch('/api/workspace/dashboard', { cache: 'no-store' }).then(async (response) => {
       if (!response.ok) return
-      const data = await response.json() as { metrics?: { team?: number; clients?: number; projects?: number; tickets?: number; contracts?: number; messages?: number }; ranking?: DashboardRankingMember[] }
-      setDashboardData({ team: data.metrics?.team ?? 0, clients: data.metrics?.clients ?? 0, projects: data.metrics?.projects ?? 0, tickets: data.metrics?.tickets ?? 0, contracts: data.metrics?.contracts ?? 0, messages: data.metrics?.messages ?? 0, ranking: data.ranking ?? [] })
+      const data = await response.json() as { metrics?: { team?: number; leads?: number; clients?: number; projects?: number; tickets?: number; contracts?: number; messages?: number; openReceivables?: number; overdueReceivables?: number; receivedThisMonth?: number }; ranking?: DashboardRankingMember[] }
+      setDashboardData({ team: data.metrics?.team ?? 0, leads: data.metrics?.leads ?? 0, clients: data.metrics?.clients ?? 0, projects: data.metrics?.projects ?? 0, tickets: data.metrics?.tickets ?? 0, contracts: data.metrics?.contracts ?? 0, messages: data.metrics?.messages ?? 0, openReceivables: data.metrics?.openReceivables ?? 0, overdueReceivables: data.metrics?.overdueReceivables ?? 0, receivedThisMonth: data.metrics?.receivedThisMonth ?? 0, ranking: data.ranking ?? [] })
     })
   }, [activeSection])
 
@@ -378,7 +379,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
           <div className="hidden items-center gap-2 text-xs text-slate-500 sm:flex"><span>Workspace</span><ChevronRight className="size-3" /><span className="text-slate-300">{activeSection}</span></div>
           <div className="ml-auto flex items-center gap-2">
             <button onClick={() => setSearchOpen(true)} aria-label="Buscar (Ctrl+K)" className="hidden items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2 text-xs text-slate-500 transition-colors hover:border-white/15 hover:text-slate-300 md:flex"><Search className="size-3.5" />Buscar<span className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-600">Ctrl K</span></button>
-            {canUseAssistant && <button type="button" onClick={() => setAssistantOpen((current) => !current)} aria-label={assistantHasConversation ? 'Code-X, conversa ativa' : 'Code-X'} aria-expanded={assistantOpen} title="Code-X · Ctrl+Shift+A" className={`relative grid size-9 place-items-center rounded-lg border transition-colors ${assistantOpen ? 'border-blue-400/40 bg-blue-400/10 text-blue-200' : 'border-white/[0.08] bg-white/[0.025] text-slate-400 hover:border-white/15 hover:text-slate-100'}`}><Sparkles className="size-4" />{assistantHasConversation && <span aria-hidden="true" className="absolute right-1 top-1 size-1.5 rounded-full bg-emerald-400" />}</button>}
+            {canUseAssistant && <button type="button" onClick={() => setAssistantOpen((current) => !current)} aria-label={assistantHasConversation ? 'Code-X, conversa ativa' : 'Code-X'} aria-expanded={assistantOpen} title="Code-X · Ctrl+Shift+A" className={`relative grid size-9 place-items-center overflow-hidden rounded-lg border transition-colors ${assistantOpen ? 'border-blue-400/40 bg-blue-400/10 text-blue-200' : 'border-white/[0.08] bg-white/[0.025] text-slate-400 hover:border-white/15 hover:text-slate-100'}`}><Image src="/codexa-logo.png" alt="" width={28} height={28} className="size-7 object-contain" />{assistantHasConversation && <span aria-hidden="true" className="absolute right-1 top-1 size-1.5 rounded-full bg-emerald-400" />}</button>}
             <div className="relative">
               <button onClick={() => void toggleNotifications()} className="relative rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white" aria-label="Notificações" aria-expanded={notificationsOpen}>
                 <Bell className="size-[18px]" />
@@ -407,7 +408,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
           </div>
         </header>
         <main className="workspace-main mx-auto w-full max-w-[1500px] overflow-x-hidden px-3 py-5 sm:px-7 sm:py-7 lg:px-9">{shouldRenderRoutePage ? page : <>{activeSection === 'Dashboard' &&         <div id="dashboard-overview" className="scroll-mt-24"><div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Visão geral</p><h1 className="text-2xl font-semibold tracking-tight text-white sm:text-[28px]">Olá, {displayName}</h1><p className="mt-1.5 text-sm text-slate-500">Acompanhe as áreas permitidas para você.</p></div>{permissions.includes('*') && <button className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/15 transition-colors hover:bg-blue-400"><Plus className="size-4" />Adicionar registro</button>}</div>
-          <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{metrics.map((metric) => ({ ...metric, value: metric.label === 'Clientes ativos' ? String(dashboardData.clients) : metric.label === 'Projetos em andamento' ? String(dashboardData.projects) : metric.label === 'Chamados abertos' ? String(dashboardData.tickets) : metric.label === 'Contratos ativos' ? String(dashboardData.contracts) : metric.value, hint: metric.label === 'Clientes ativos' ? 'Membros ativos no workspace' : metric.label === 'Chamados abertos' ? 'Mensagens novas para triagem' : metric.hint })).filter((metric) => {
+          <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{metrics.map((metric) => ({ ...metric, value: metric.label === 'Leads ativos' ? String(dashboardData.leads) : metric.label === 'Clientes ativos' ? String(dashboardData.clients) : metric.label === 'Projetos em andamento' ? String(dashboardData.projects) : metric.label === 'Chamados abertos' ? String(dashboardData.tickets) : metric.label === 'Contratos ativos' ? String(dashboardData.contracts) : metric.label === 'Valores a receber' ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(dashboardData.openReceivables) : metric.label === 'Valores vencidos' ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(dashboardData.overdueReceivables) : metric.label === 'Receita no mês' ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(dashboardData.receivedThisMonth) : metric.value, hint: metric.label === 'Clientes ativos' ? 'Clientes cadastrados' : metric.label === 'Leads ativos' ? 'Leads cadastrados' : metric.label === 'Chamados abertos' ? 'Chamados em aberto' : metric.label === 'Valores a receber' ? 'Saldo pendente de recebimento' : metric.label === 'Valores vencidos' ? 'Saldo vencido em aberto' : metric.label === 'Receita no mês' ? 'Recebimentos no mês atual' : metric.hint })).filter((metric) => {
             const metricPermission: Record<string, string> = {
               'Leads ativos': 'leads:view', 'Clientes ativos': 'clients:view', 'Projetos em andamento': 'projects:view',
               'Chamados abertos': 'support:view', 'Contratos ativos': 'contracts:view',

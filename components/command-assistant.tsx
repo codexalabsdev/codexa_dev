@@ -89,9 +89,9 @@ function CodexaNeonLogo({ size = 'compact' }: { size?: 'compact' | 'large' }) {
       <Image
         src="/codexa-logo.png"
         alt="Codexa"
-        width={isCompact ? 72 : 88}
-        height={isCompact ? 72 : 88}
-        className={`relative z-10 max-w-none object-contain drop-shadow-[0_0_8px_rgba(34,211,238,.85)] ${isCompact ? 'size-[72px]' : 'size-[88px]'}`}
+        width={isCompact ? 32 : 56}
+        height={isCompact ? 32 : 56}
+        className={`relative z-10 size-auto max-w-full object-contain object-center drop-shadow-[0_0_8px_rgba(34,211,238,.85)] ${isCompact ? 'max-h-7 max-w-7' : 'max-h-14 max-w-14'}`}
       />
     </span>
   )

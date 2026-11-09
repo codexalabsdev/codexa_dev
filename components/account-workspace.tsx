@@ -1,6 +1,7 @@
 'use client'
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
+import type { AuthError, User } from '@supabase/supabase-js'
 import { Check, CircleHelp, Contrast, Eye, Gauge, Laptop, Moon, Palette, RotateCcw, Save, Sun, Type, Waves } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { ColorPicker } from '@/components/color-picker'
@@ -53,23 +54,22 @@ export function AccountWorkspace({ section, initialName = '' }: { section: strin
   useEffect(() => {
     setName(initialName)
     const supabase = createClient()
-    void (async () => {
-      const { data: authData, error: authError } = await supabase.auth.getUser()
-      if (authError || !authData.user) {
+    void supabase.auth.getUser().then(async ({ data, error }: { data: { user: User | null }; error: AuthError | null }) => {
+      if (error || !data.user) {
         setMessageError(true)
-        setMessage('Não foi possível carregar os dados da conta.')
+        setMessage('Não foi possível autenticar para carregar a aparência.')
         setLoadingAppearance(false)
         return
       }
-      setEmail(authData.user.email ?? '')
+      setEmail(data.user.email ?? '')
       const { data: preferences, error: preferencesError } = await supabase
         .from('user_preferences')
-        .select('theme,primary_color,secondary_color,tertiary_color,background_color,surface_color,sidebar_color,header_color,text_color,muted_text_color,border_color,focus_color,font_size_base,heading_scale,font_weight,line_height,letter_spacing,button_radius,card_radius,shadow_strength,appearance_palette,accent_color,font_family,radius_scale,contrast_mode,motion_mode,navigation_collapsed,table_density')
-        .eq('user_id', authData.user.id)
+        .select('theme,primary_color,secondary_color,tertiary_color,background_color,surface_color,sidebar_color,header_color,text_color,muted_text_color,border_color,focus_color,font_size_base,heading_scale,font_weight,line_height,letter_spacing,button_radius,card_radius,shadow_strength,appearance_palette,accent_color,font_family,radius_scale,contrast_mode,motion_mode')
+        .eq('user_id', data.user.id)
         .maybeSingle()
       if (preferencesError) {
         setMessageError(true)
-        setMessage('Não foi possível carregar suas preferências de aparência.')
+        setMessage('Não foi possível carregar as preferências de aparência.')
       }
       const loaded = preferences as Partial<WorkspaceAppearance> | null
       const nextAppearance = { ...defaultAppearance, ...(loaded ?? {}) } as WorkspaceAppearance
@@ -77,7 +77,7 @@ export function AccountWorkspace({ section, initialName = '' }: { section: strin
       setSavedAppearance(nextAppearance)
       applyWorkspaceAppearance(nextAppearance)
       setLoadingAppearance(false)
-    })()
+    })
   }, [initialName])
 
   const isAppearance = section === 'Aparência'
@@ -103,7 +103,7 @@ export function AccountWorkspace({ section, initialName = '' }: { section: strin
     const { data: authData, error: authError } = await supabase.auth.getUser()
     if (authError || !authData.user) {
       setMessageError(true)
-      setMessage('Sua sessão expirou. Entre novamente para salvar as preferências.')
+      setMessage('Sua sessão expirou. Entre novamente para salvar a aparência.')
       setSaving(false)
       return
     }
@@ -135,8 +135,6 @@ export function AccountWorkspace({ section, initialName = '' }: { section: strin
       radius_scale: appearance.radius_scale,
       contrast_mode: appearance.contrast_mode,
       motion_mode: appearance.motion_mode,
-      navigation_collapsed: appearance.navigation_collapsed,
-      table_density: appearance.table_density,
     }, { onConflict: 'user_id' })
     if (error) {
       setMessageError(true)

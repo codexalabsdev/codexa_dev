@@ -1,9 +1,25 @@
 /* Workspace visual contract: semantic tokens win over legacy utility colors. */
 .workspace-shell {
+  font-family: var(--workspace-font-family, Inter, ui-sans-serif, system-ui, sans-serif);
   font-size: var(--font-size-base, 0.875rem);
   font-weight: var(--font-weight-base, 400);
   line-height: var(--line-height-base, 1.5);
   letter-spacing: var(--letter-spacing-base, 0);
+}
+
+[data-contrast='high'] .workspace-shell {
+  --workspace-text: var(--text-primary);
+  --workspace-muted: var(--text-primary);
+  --workspace-border: var(--border-strong);
+}
+
+[data-motion='reduced'] .workspace-shell *,
+[data-motion='reduced'] .workspace-shell *::before,
+[data-motion='reduced'] .workspace-shell *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
 }
 
 .workspace-shell button,
@@ -46,11 +62,22 @@
   color: var(--workspace-text) !important;
 }
 
-[data-theme] .workspace-shell [class*='text-blue-400'],
-[data-theme] .workspace-shell [class*='text-blue-300'],
-[data-theme] .workspace-shell [class*='text-violet-400'],
-[data-theme] .workspace-shell [class*='text-emerald-400'] {
-  color: var(--primary-custom, var(--primary)) !important;
+[data-theme] .workspace-shell :not(button)[class*='text-blue-400'],
+[data-theme] .workspace-shell :not(button)[class*='text-blue-300'] {
+  color: var(--text-info) !important;
+}
+
+[data-theme] .workspace-shell :not(button)[class*='text-violet-400'] {
+  color: var(--text-accent) !important;
+}
+
+[data-theme] .workspace-shell :not(button)[class*='text-emerald-400'] {
+  color: var(--text-success) !important;
+}
+
+/* Page eyebrow labels are secondary copy, never action/button color. */
+[data-theme] .workspace-shell :not(button)[class*='uppercase'][class*='tracking-'] {
+  color: var(--workspace-muted, var(--muted-foreground)) !important;
 }
 
 .workspace-shell :focus-visible {

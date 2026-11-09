@@ -14,7 +14,9 @@ type Proposal = { id: string; proposal_number: string; title: string; status: st
 type Client = { id: string; legal_name: string; trade_name: string | null }
 
 const proposalStatuses = ['Rascunho', 'Enviada', 'Em negociação', 'Aprovada', 'Rejeitada', 'Cancelada', 'Expirada'] as const
+const contractStatuses = ['Preparação', 'Em revisão', 'Enviado', 'Assinado', 'Ativo', 'Vigente', 'Encerrado', 'Cancelado'] as const
 const proposalStatusSet = new Set<string>(proposalStatuses)
+const contractStatusSet = new Set<string>(contractStatuses)
 
 const inputClass = 'w-full rounded-lg border border-white/10 bg-[#151b24] p-3 text-sm text-white'
 const currency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0))
@@ -84,6 +86,12 @@ export function CommercialWorkspace({ initialTab = 'proposals', permissions = []
       setError(`Seu cargo não tem permissão para criar ${tab === 'contracts' ? 'contratos' : 'propostas'}.`)
       return
     }
+    const formData = new FormData(event.currentTarget)
+    const rawAmount = Number(formData.get(tab === 'proposals' ? 'unit_value' : 'contracted_value') || 0)
+    if (!Number.isFinite(rawAmount) || rawAmount <= 0) {
+      setError('Informe um valor maior que zero.')
+      return
+    }
     setSaving(true)
     setError('')
     const data = Object.fromEntries(new FormData(event.currentTarget))
@@ -109,6 +117,8 @@ export function CommercialWorkspace({ initialTab = 'proposals', permissions = []
         })
         if (insertError) throw insertError
       } else {
+        const contractStatus = String(data.status || 'Preparação')
+        if (!contractStatusSet.has(contractStatus)) throw new Error('Status de contrato inválido.')
         const file = data.document instanceof File ? data.document : undefined
         if (file?.size && (file.type !== 'application/pdf' || file.size > 10 * 1024 * 1024)) {
           setError('O documento deve ser PDF e ter no máximo 10 MB.')
@@ -123,7 +133,7 @@ export function CommercialWorkspace({ initialTab = 'proposals', permissions = []
           starts_at: data.starts_at || null,
           ends_at: data.ends_at || null,
           contracted_value: Number(data.contracted_value || 0),
-          status: data.status || 'Preparação',
+          status: contractStatus,
           observations: data.observations || null,
         }).select('id').single()
         if (insertError) throw insertError
@@ -154,8 +164,19 @@ export function CommercialWorkspace({ initialTab = 'proposals', permissions = []
     setError('')
     const data = Object.fromEntries(new FormData(event.currentTarget))
     const proposalStatus = String(data.status || '')
+    const amount = Number(data.amount || 0)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError('Informe um valor maior que zero.')
+      setSaving(false)
+      return
+    }
     if (tab === 'proposals' && !proposalStatusSet.has(proposalStatus)) {
       setError('Selecione um status válido para a proposta.')
+      setSaving(false)
+      return
+    }
+    if (tab === 'contracts' && !contractStatusSet.has(String(data.status || ''))) {
+      setError('Selecione um status válido para o contrato.')
       setSaving(false)
       return
     }
@@ -215,7 +236,7 @@ export function CommercialWorkspace({ initialTab = 'proposals', permissions = []
     </div>}
     {modal && <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4"><form onSubmit={submit} className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#11161e] p-6">
       <div className="flex items-center justify-between"><h3 className="text-lg font-semibold text-white">Novo {tab === 'contracts' ? 'contrato' : 'proposta'}</h3><button type="button" onClick={() => setModal(false)} aria-label="Fechar"><X className="text-slate-400" /></button></div>
-      <div className="mt-5 grid gap-3"><input name="title" required placeholder="Título" className={inputClass} /><select name="client_id" className={inputClass}><option value="">Cliente</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.trade_name || client.legal_name}</option>)}</select>{tab === 'proposals' && <label className="text-xs text-slate-400">Status<select name="status" defaultValue="Rascunho" className={`${inputClass} mt-1`}>{proposalStatuses.map((status) => <option key={status} value={status}>{status}</option>)}</select></label>}<input name={tab === 'proposals' ? 'unit_value' : 'contracted_value'} type="number" step="0.01" placeholder={tab === 'proposals' ? 'Valor unitário' : 'Valor contratado'} className={inputClass} />{tab === 'contracts' && <label className="rounded-lg border border-dashed border-violet-400/30 p-4 text-xs text-slate-400">PDF do contrato<input name="document" type="file" accept="application/pdf,.pdf" className="mt-2 block w-full text-xs" /></label>}{tab === 'proposals' && <><input name="quantity" type="number" min="1" step="1" defaultValue="1" placeholder="Quantidade" className={inputClass} /><input name="discount" type="number" min="0" step="0.01" defaultValue="0" placeholder="Desconto" className={inputClass} /><input name="item_description" required placeholder="Descrição do item" className={inputClass} /></>}<textarea name="description" placeholder="Descrição ou observações" className={`${inputClass} min-h-24`} /></div>
+      <div className="mt-5 grid gap-3"><input name="title" required placeholder="Título" className={inputClass} /><select name="client_id" className={inputClass}><option value="">Cliente</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.trade_name || client.legal_name}</option>)}</select>{tab === 'proposals' && <label className="text-xs text-slate-400">Status<select name="status" defaultValue="Rascunho" className={`${inputClass} mt-1`}>{proposalStatuses.map((status) => <option key={status} value={status}>{status}</option>)}</select></label>}<input name={tab === 'proposals' ? 'unit_value' : 'contracted_value'} type="number" min="0.01" step="0.01" required placeholder={tab === 'proposals' ? 'Valor unitário' : 'Valor contratado'} className={inputClass} />{tab === 'proposals' ? <><input name="valid_until" type="date" className={inputClass} /><p className="-mt-2 text-[11px] text-slate-500">Deixe a validade em branco para uma proposta sem prazo.</p></> : <><label className="text-xs text-slate-400">Status<select name="status" defaultValue="Preparação" className={`${inputClass} mt-1`}>{contractStatuses.map((status) => <option key={status}>{status}</option>)}</select></label><div className="grid gap-3 sm:grid-cols-2"><label className="text-xs text-slate-400">Início<input name="starts_at" type="date" className={`${inputClass} mt-1`} /></label><label className="text-xs text-slate-400">Encerramento<input name="ends_at" type="date" className={`${inputClass} mt-1`} /></label></div><label className="rounded-lg border border-dashed border-violet-400/30 p-4 text-xs text-slate-400">PDF do contrato<input name="document" type="file" accept="application/pdf,.pdf" className="mt-2 block w-full text-xs" /></label></>}{tab === 'proposals' && <><input name="quantity" type="number" min="1" step="1" defaultValue="1" placeholder="Quantidade" className={inputClass} /><input name="discount" type="number" min="0" step="0.01" defaultValue="0" placeholder="Desconto" className={inputClass} /><input name="item_description" required placeholder="Descrição do item" className={inputClass} /></>}<textarea name="description" placeholder="Descrição ou observações" className={`${inputClass} min-h-24`} /></div>
       {error && <p role="alert" className="mt-4 rounded-lg bg-amber-400/10 p-3 text-xs text-amber-300">{error}</p>}<button disabled={saving} className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--button-primary-bg)] py-3 text-sm font-semibold text-[var(--button-primary-text)] shadow-sm transition-colors hover:bg-[var(--button-primary-hover)]">{saving && <Loader2 className="size-4 animate-spin" />}Salvar</button>
     </form></div>}
     {record && <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRecord(null) }}>

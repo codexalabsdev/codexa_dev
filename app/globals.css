@@ -138,6 +138,11 @@
   --popover-foreground: #172033;
   --primary: #3159d8;
   --primary-foreground: #ffffff;
+  --text-info: #3159d8;
+  --text-accent: #755be0;
+  --text-success: #16845b;
+  --text-warning: #a66b00;
+  --text-danger: #c63d50;
   --secondary: #e9edf6;
   --secondary-foreground: #26324a;
   --muted: #eef1f7;
@@ -158,6 +163,8 @@
 }
 
 [data-theme] .workspace-shell { background: var(--workspace-background) !important; color: var(--workspace-text); }
+/* Modules still contain legacy arbitrary Tailwind colors. Normalize those surfaces through the active appearance tokens. */
+[data-theme] .workspace-shell [class*='bg-[#'] { background-color: var(--workspace-surface) !important; }
 [data-theme] .workspace-sidebar { background: var(--workspace-sidebar) !important; border-color: var(--workspace-border) !important; }
 [data-theme] .workspace-header { background: color-mix(in srgb, var(--workspace-header) 92%, transparent) !important; border-color: var(--workspace-border) !important; }
 [data-theme] .workspace-shell main [class*='bg-[#11161e'],
@@ -165,7 +172,12 @@
 [data-theme] .workspace-shell [role='dialog'] [class*='bg-[#11161e'] { background: var(--workspace-surface) !important; }
 [data-theme] .workspace-shell [class*='border-white'] { border-color: color-mix(in srgb, var(--workspace-border) 72%, transparent) !important; }
 [data-theme] .workspace-shell .text-white { color: var(--workspace-text) !important; }
-[data-theme] .workspace-shell [class*='text-slate-'] { color: var(--workspace-muted); }
+[data-theme] .workspace-shell [class*='text-slate-100'],
+[data-theme] .workspace-shell [class*='text-slate-200'] { color: var(--workspace-text) !important; }
+[data-theme] .workspace-shell [class*='text-slate-300'],
+[data-theme] .workspace-shell [class*='text-slate-400'],
+[data-theme] .workspace-shell [class*='text-slate-500'] { color: var(--workspace-muted) !important; }
+[data-theme] .workspace-shell [class*='bg-white/'] { background-color: color-mix(in srgb, var(--workspace-text) 6%, transparent) !important; }
 [data-theme='light'] .workspace-shell { background: var(--background) !important; color: var(--foreground); }
 [data-theme='light'] .workspace-shell [class*='bg-[#'] { background-color: var(--card) !important; }
 [data-theme='light'] .workspace-shell [class*='border-white'] { border-color: var(--border) !important; }
@@ -175,7 +187,9 @@
 [data-theme='light'] .workspace-shell .bg-white\/5,
 [data-theme='light'] .workspace-shell .bg-white\/\[0\.025\],
 [data-theme='light'] .workspace-shell .bg-white\/\[0\.03\] { background-color: color-mix(in srgb, var(--foreground) 5%, transparent); }
-[data-accent] .text-blue-400, [data-accent] .text-blue-300, [data-accent] .text-violet-400 { color: var(--primary) !important; }
+[data-accent] .text-blue-400, [data-accent] .text-blue-300 { color: var(--text-info) !important; }
+[data-accent] .text-violet-400 { color: var(--text-accent) !important; }
+[data-accent] .text-emerald-400 { color: var(--text-success) !important; }
 [data-accent] .border-blue-400 { border-color: var(--primary) !important; }
 [data-accent] .bg-blue-400 { background-color: var(--primary) !important; }
 [data-accent='violet'] { --primary: #9b7cff; --ring: #9b7cff; --sidebar-primary: #9b7cff; --chart-1: #9b7cff; }
@@ -219,6 +233,11 @@ html[data-font] button[class~='bg-white'], html[data-font] button[class*='bg-whi
     --popover-foreground: #f1f4fa;
     --primary: #6485ff;
     --primary-foreground: #ffffff;
+    --text-info: #6485ff;
+    --text-accent: #9b7cff;
+    --text-success: #42c995;
+    --text-warning: #e6b85c;
+    --text-danger: #e77986;
     --secondary: #1b2230;
     --secondary-foreground: #e7ecf6;
     --muted: #1a202c;
@@ -265,24 +284,55 @@ button, [role='button'] { border-radius: var(--button-radius, 0.65rem); }
   border-radius: var(--button-radius, 0.65rem);
 }
 .field:focus { border-color: var(--focus-color, var(--ring)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-color, var(--ring)) 25%, transparent); }
-.workspace-shell button[class*='bg-[var(--primary)]'],
-.workspace-shell button.bg-primary,
-.workspace-shell button[class~='bg-white'],
-.workspace-shell button[class~='bg-violet-500'],
-.workspace-shell button[class~='bg-blue-500'],
-.workspace-shell button[class~='bg-indigo-500'],
-.workspace-shell button[class~='bg-cyan-500'],
-.workspace-shell button[class~='bg-emerald-500'],
-.workspace-shell button[class~='bg-purple-500'] { background-color: var(--button-primary-bg) !important; color: var(--button-primary-text) !important; }
-.workspace-shell button[class~='bg-white']:hover,
-.workspace-shell button[class~='bg-violet-500']:hover,
-.workspace-shell button[class~='bg-blue-500']:hover,
-.workspace-shell button[class~='bg-indigo-500']:hover,
-.workspace-shell button[class~='bg-cyan-500']:hover,
-.workspace-shell button[class~='bg-emerald-500']:hover,
-.workspace-shell button[class~='bg-purple-500']:hover { background-color: var(--button-primary-hover) !important; }
-.workspace-shell button[class*='bg-[var(--primary)]']:hover, .workspace-shell button.bg-primary:hover { background-color: var(--button-primary-hover) !important; }
-.workspace-shell button:disabled { background-color: var(--button-disabled-bg) !important; color: var(--button-disabled-text) !important; }
+.workspace-shell button[class*='bg-[var(--primary)]'], .workspace-shell button.bg-primary, .workspace-shell button[class~='bg-white'], .workspace-shell button[class~='bg-violet-500'] { background-color: var(--button-primary-bg) !important; color: var(--button-primary-text) !important; }
+.workspace-shell button[class~='bg-white']:hover, .workspace-shell button[class~='bg-violet-500']:hover { background-color: var(--button-primary-hover) !important; }
+  .workspace-shell button[class*='bg-[var(--primary)]']:hover, .workspace-shell button.bg-primary:hover { background-color: var(--button-primary-hover) !important; }
+  /* Every actionable colored button uses the appearance primary token. Destructive actions remain semantic. */
+  [data-theme] .workspace-shell button[class~='bg-blue-300'],
+  [data-theme] .workspace-shell button[class~='bg-blue-400'],
+  [data-theme] .workspace-shell button[class~='bg-blue-500'],
+  [data-theme] .workspace-shell button[class~='bg-blue-600'],
+  [data-theme] .workspace-shell button[class~='bg-blue-700'],
+  [data-theme] .workspace-shell button[class~='bg-cyan-300'],
+  [data-theme] .workspace-shell button[class~='bg-cyan-400'],
+  [data-theme] .workspace-shell button[class~='bg-cyan-500'],
+  [data-theme] .workspace-shell button[class~='bg-cyan-600'],
+  [data-theme] .workspace-shell button[class~='bg-violet-300'],
+  [data-theme] .workspace-shell button[class~='bg-violet-400'],
+  [data-theme] .workspace-shell button[class~='bg-violet-500'],
+  [data-theme] .workspace-shell button[class~='bg-violet-600'],
+  [data-theme] .workspace-shell button[class~='bg-indigo-500'],
+  [data-theme] .workspace-shell button[class~='bg-indigo-600'],
+  [data-theme] .workspace-shell button[class~='bg-emerald-500'],
+  [data-theme] .workspace-shell button[class~='bg-emerald-600'],
+  [data-theme] .workspace-shell button[class~='bg-teal-500'],
+  [data-theme] .workspace-shell button[class~='bg-teal-600'],
+  [data-theme] .workspace-shell button[class~='bg-orange-500'],
+  [data-theme] .workspace-shell button[class~='bg-amber-500'] {
+    background-color: var(--button-primary-bg) !important;
+    color: var(--button-primary-text) !important;
+    border-color: transparent !important;
+  }
+  [data-theme] .workspace-shell button[class~='bg-blue-300']:hover,
+  [data-theme] .workspace-shell button[class~='bg-blue-400']:hover,
+  [data-theme] .workspace-shell button[class~='bg-blue-500']:hover,
+  [data-theme] .workspace-shell button[class~='bg-blue-600']:hover,
+  [data-theme] .workspace-shell button[class~='bg-cyan-300']:hover,
+  [data-theme] .workspace-shell button[class~='bg-cyan-400']:hover,
+  [data-theme] .workspace-shell button[class~='bg-cyan-500']:hover,
+  [data-theme] .workspace-shell button[class~='bg-violet-300']:hover,
+  [data-theme] .workspace-shell button[class~='bg-violet-400']:hover,
+  [data-theme] .workspace-shell button[class~='bg-violet-500']:hover,
+  [data-theme] .workspace-shell button[class~='bg-violet-600']:hover,
+  [data-theme] .workspace-shell button[class~='bg-indigo-500']:hover,
+  [data-theme] .workspace-shell button[class~='bg-emerald-500']:hover,
+  [data-theme] .workspace-shell button[class~='bg-emerald-600']:hover,
+  [data-theme] .workspace-shell button[class~='bg-teal-500']:hover,
+  [data-theme] .workspace-shell button[class~='bg-orange-500']:hover,
+  [data-theme] .workspace-shell button[class~='bg-amber-500']:hover {
+    background-color: var(--button-primary-hover) !important;
+  }
+  .workspace-shell button:disabled { background-color: var(--button-disabled-bg) !important; color: var(--button-disabled-text) !important; }
 .workspace-shell a { color: var(--text-link); }
 .workspace-shell hr, .workspace-shell [role='separator'] { border-color: var(--border-divider); }
 [data-theme='light'] .workspace-shell .rounded-xl.border, [data-theme='light'] .workspace-shell .rounded-2xl.border { background-color: var(--background-card); border-color: var(--border-default); box-shadow: 0 8px 24px rgb(31 41 55 / 8%); }
@@ -386,31 +436,31 @@ button, [role='button'] { border-radius: var(--button-radius, 0.65rem); }
   }
 
   th {
-    color: #a6b0c2;
+    color: var(--workspace-muted, var(--muted-foreground));
     font-size: 0.75rem;
     font-weight: 600;
   }
 
   td {
-    color: #dce3ef;
+    color: var(--workspace-text, var(--foreground));
   }
 
   tr + tr td {
-    border-top: 1px solid #252d3b;
+    border-top: 1px solid var(--border-divider, var(--border));
   }
 
   select {
-    color-scheme: dark;
+    color-scheme: var(--workspace-theme-scheme, dark);
   }
 
   option {
-    color: #e7ecf6;
-    background-color: #171d28;
+    color: var(--workspace-text, var(--foreground));
+    background-color: var(--workspace-surface, var(--popover));
   }
 
   option:checked {
-    color: #ffffff;
-    background-color: #344a8a;
+    color: var(--primary-foreground);
+    background-color: var(--primary);
   }
 
   ::-webkit-scrollbar {
@@ -434,12 +484,12 @@ button, [role='button'] { border-radius: var(--button-radius, 0.65rem); }
 }
 
 .workspace-shell {
-  background-image: radial-gradient(circle at 78% -12%, rgb(100 133 255 / 10%), transparent 30rem), linear-gradient(180deg, #090b10 0%, #0b0d12 45%, #090b10 100%);
+  background-image: radial-gradient(circle at 78% -12%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 30rem), linear-gradient(180deg, color-mix(in srgb, var(--workspace-background, var(--background)) 96%, var(--primary) 4%) 0%, var(--workspace-background, var(--background)) 45%, var(--workspace-background, var(--background)) 100%);
 }
 
 .workspace-sidebar {
-  background-image: linear-gradient(180deg, rgb(18 24 36 / 96%) 0%, rgb(11 15 22 / 99%) 100%);
-  box-shadow: 14px 0 40px rgb(0 0 0 / 12%);
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--workspace-sidebar, var(--sidebar)) 96%, var(--primary) 4%) 0%, var(--workspace-sidebar, var(--sidebar)) 100%);
+  box-shadow: 14px 0 40px color-mix(in srgb, var(--workspace-text, var(--foreground)) 12%, transparent);
 }
 
 .workspace-sidebar nav::-webkit-scrollbar {
@@ -791,4 +841,35 @@ button, [role='button'] { border-radius: var(--button-radius, 0.65rem); }
 [data-theme="light"] .assistant-markdown .hljs-variable,
 [data-theme="light"] .assistant-markdown .hljs-params { color: #a52e4e; }
 [data-theme="light"] .assistant-markdown .hljs-attr,
-[data-theme="light"] .assistant-markdown .hljs-property { color: #7d5b13; }
+	[data-theme="light"] .assistant-markdown .hljs-property { color: #7d5b13; }
+
+.terminal-cursor {
+  display: inline-block;
+  width: 0.55em;
+  height: 1.15em;
+  background: #8bd5ff;
+  vertical-align: -0.18em;
+  animation: terminal-cursor-blink 1s steps(2, start) infinite;
+}
+
+.terminal-dots {
+  display: inline-block;
+  width: 1.3em;
+  overflow: hidden;
+  vertical-align: bottom;
+  animation: terminal-dots 1.2s steps(4, end) infinite;
+}
+
+@keyframes terminal-cursor-blink {
+  50% { opacity: 0; }
+}
+
+@keyframes terminal-dots {
+  0% { width: 0; }
+  100% { width: 1.3em; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal-cursor,
+  .terminal-dots { animation: none; }
+}

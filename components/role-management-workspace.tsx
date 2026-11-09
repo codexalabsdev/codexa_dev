@@ -337,6 +337,24 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
     }
   }
 
+  async function deleteMember(member: Member) {
+    if (member.user_id === currentUserId) return
+    if (!window.confirm(`Excluir ${member.full_name} e revogar o acesso ao workspace? Esta ação não pode ser desfeita.`)) return
+    setError('')
+    setNotice('')
+    setSaving(true)
+    try {
+      const result = await api<{ warning?: string | null }>(`/api/admin/rbac/users/${member.id}`, { method: 'DELETE' })
+      setMemberDetails(null)
+      setNotice(result.warning || 'Usuário excluído e acesso revogado.')
+      await load()
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Não foi possível excluir o usuário.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function inviteMember(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setSaving(true)
@@ -356,7 +374,7 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
       setInviteOpen(false)
       setNotice(result.warning || (result.accountCreated
         ? 'Conta criada e associada ao cargo. Compartilhe a senha inicial com a pessoa por um canal seguro.'
-        : 'Conta existente associada ao cargo selecionado.'))
+        : 'Conta existente confirmada, senha sincronizada quando informada e associada ao cargo selecionado.'))
       await load()
     } catch (inviteError) {
       setError(inviteError instanceof Error ? inviteError.message : 'Não foi possível criar o usuário.')
@@ -477,7 +495,7 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
                 <td className="px-4 py-3"><select aria-label={`Cargo de ${member.full_name}`} disabled={self} value={member.role_name} onChange={(event) => void updateMember(member, { roleName: event.target.value })} className="rounded-lg border border-white/[0.08] bg-[#0d1118] px-2 py-2 text-xs text-slate-200 disabled:opacity-50">{roles.filter((item) => item.is_active).map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</select></td>
                 <td className="px-4 py-3"><select aria-label={`Status de ${member.full_name}`} disabled={self} value={member.status.replace(/[\'"]/g, '').trim().toLowerCase() === 'ativo' || member.status.toLowerCase() === 'active' ? 'Ativo' : 'Inativo'} onChange={(event) => void updateMember(member, { status: event.target.value })} className="rounded-lg border border-white/[0.08] bg-[#0d1118] px-2 py-2 text-xs text-slate-200 disabled:opacity-50"><option value="Ativo">Ativo</option><option value="Inativo">Inativo</option></select></td>
                 <td className="px-4 py-3 text-xs text-slate-500">{new Date(member.created_at).toLocaleDateString('pt-BR')}</td>
-                <td className="px-4 py-3"><div className="flex gap-1.5"><button type="button" onClick={() => { setMemberDetails(member); setExpandedMember(member.id); void loadMemberOverrides(member.id) }} className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] px-2.5 py-2 text-xs text-slate-300 hover:bg-white/[0.04]"><Eye className="size-3.5" />Detalhes</button><button type="button" disabled={self} onClick={() => { setEditingMember(member); setMemberDetails(null) }} className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] px-2.5 py-2 text-xs text-slate-300 hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-40"><Pencil className="size-3.5" />Editar</button></div></td>
+                <td className="px-4 py-3"><div className="flex gap-1.5"><button type="button" onClick={() => { setMemberDetails(member); setExpandedMember(member.id); void loadMemberOverrides(member.id) }} className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] px-2.5 py-2 text-xs text-slate-300 hover:bg-white/[0.04]"><Eye className="size-3.5" />Detalhes</button><button type="button" disabled={self || saving} onClick={() => { setEditingMember(member); setMemberDetails(null) }} className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] px-2.5 py-2 text-xs text-slate-300 hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-40"><Pencil className="size-3.5" />Editar</button><button type="button" disabled={self || saving} onClick={() => void deleteMember(member)} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/25 px-2.5 py-2 text-xs text-rose-300 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-40"><Trash2 className="size-3.5" />Excluir</button></div></td>
               </tr>
             })}</tbody>
           </table>

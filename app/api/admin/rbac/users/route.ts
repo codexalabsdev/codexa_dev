@@ -80,6 +80,7 @@ export async function POST(request: Request) {
 
     let authUser: { id: string } | null = null
     let createdAuthUser = false
+    let linkedExistingAuthUser = false
     for (let page = 1; !authUser; page += 1) {
       const { data, error } = await actor.supabase.auth.admin.listUsers({ page, perPage: 1000 })
       if (error) {
@@ -89,6 +90,7 @@ export async function POST(request: Request) {
       const found = data.users.find((user) => user.email?.trim().toLowerCase() === email)
       if (found) {
         authUser = { id: found.id }
+        linkedExistingAuthUser = true
         break
       }
       if (data.users.length < 1000) break
@@ -98,18 +100,41 @@ export async function POST(request: Request) {
       if (typeof body.password !== 'string' || body.password.length < 8 || body.password.length > 128) {
         return NextResponse.json({ error: 'Informe uma senha inicial de 8 a 128 caracteres para criar a conta.' }, { status: 400 })
       }
+      // Keep the Auth insert minimal. Some projects have legacy auth.users triggers
+      // that fail when optional user metadata is present; metadata is synced after
+      // the team membership is safely persisted below.
       const { data, error } = await actor.supabase.auth.admin.createUser({
         email,
         password: body.password,
         email_confirm: true,
-        user_metadata: { full_name: fullName },
       })
       if (error || !data.user) {
-        console.error('Team account creation failed:', error?.message ?? 'Creation returned no user')
-        return NextResponse.json({ error: 'Não foi possível criar a conta de autenticação.' }, { status: 502 })
+        const authCode = error?.code ?? ''
+        console.error('Team account creation failed:', { code: authCode, message: error?.message ?? 'Creation returned no user' })
+        if (authCode === 'email_exists' || authCode === 'user_already_exists') {
+          return NextResponse.json({ error: 'Já existe uma conta de autenticação para este e-mail. Use a opção de vincular a conta existente.' }, { status: 409 })
+        }
+        if (authCode === 'weak_password' || authCode === 'password_too_short') {
+          return NextResponse.json({ error: 'A senha inicial não atende à política de segurança do Supabase.' }, { status: 400 })
+        }
+        if (authCode === 'unexpected_failure' || error?.message?.toLowerCase().includes('database error')) {
+          return NextResponse.json({ error: 'O Supabase recusou a criação da conta por uma falha interna. Verifique os gatilhos de criação de usuário antes de tentar novamente.' }, { status: 502 })
+        }
+        return NextResponse.json({ error: 'Não foi possível criar a conta de autenticação. Verifique se a chave administrativa do Supabase está configurada.' }, { status: 502 })
       }
       authUser = { id: data.user.id }
       createdAuthUser = true
+    } else if (linkedExistingAuthUser) {
+      const { error: authUpdateError } = await actor.supabase.auth.admin.updateUserById(authUser.id, {
+        email_confirm: true,
+        ...(typeof body.password === 'string' && body.password.length >= 8 && body.password.length <= 128
+          ? { password: body.password }
+          : {}),
+      })
+      if (authUpdateError) {
+        console.error('Existing team account confirmation failed:', authUpdateError.message)
+        return NextResponse.json({ error: 'A conta existe, mas não foi possível habilitar o login.' }, { status: 502 })
+      }
     }
 
     const { data: existingAuthMemberships, error: authMembershipError } = await actor.supabase
@@ -141,7 +166,7 @@ export async function POST(request: Request) {
         status: 'Ativo',
         joined_on: new Date().toISOString().slice(0, 10),
       })
-    const { data: member, error: memberError } = await memberQuery
+    let { data: member, error: memberError } = await memberQuery
       .select('id,user_id,full_name,email,job_title,department,joined_on,role_name,status,created_at,updated_at').single()
     if (memberError || !member) {
       console.error('Team account membership creation failed:', memberError?.message ?? 'Membership returned no row')
@@ -151,6 +176,33 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ error: 'A conta foi localizada/criada, mas o vínculo com a equipe não foi salvo. Verifique a lista antes de tentar novamente.' }, { status: 503 })
     }
+
+    // Enforce the invariant at the API boundary even if an older nullable schema or trigger drops user_id.
+    if (member.user_id !== authUser.id) {
+      const { data: repairedMember, error: repairError } = await actor.supabase
+        .from('team_members')
+        .update({ user_id: authUser.id, updated_at: new Date().toISOString() })
+        .eq('id', member.id)
+        .select('id,user_id,full_name,email,job_title,department,joined_on,role_name,status,created_at,updated_at')
+        .single()
+      if (repairError || repairedMember?.user_id !== authUser.id) {
+        console.error('Team account link invariant failed:', repairError?.message ?? 'user_id was not persisted')
+        if (createdAuthUser) {
+          const { error: cleanupError } = await actor.supabase.auth.admin.deleteUser(authUser.id)
+          if (cleanupError) console.error('Orphaned team account cleanup failed:', cleanupError.message)
+        }
+        return NextResponse.json({ error: 'A conta de autenticação foi criada, mas o vínculo não pôde ser confirmado. Nenhum usuário foi salvo parcialmente.' }, { status: 503 })
+      }
+      member = repairedMember
+    }
+
+    if (createdAuthUser) {
+      const { error: metadataError } = await actor.supabase.auth.admin.updateUserById(authUser.id, {
+        user_metadata: { full_name: fullName },
+      })
+      if (metadataError) console.error('New team account metadata sync failed:', metadataError.message)
+    }
+
     const { error: auditError } = await actor.supabase.from('admin_audit_events').insert({
       actor_id: actor.actorId,
       action_name: createdAuthUser ? 'team.created' : 'team.linked',

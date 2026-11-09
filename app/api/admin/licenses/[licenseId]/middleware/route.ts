@@ -1,6 +1,7 @@
+import JSZip from 'jszip'
 import { NextResponse } from 'next/server'
 import { requireWorkspacePermission, AdminApiError } from '@/lib/supabase/admin-server'
-import { buildMiddlewareSource } from '@/lib/licensing/middleware-generator'
+import { buildBlockedPageSource, buildMiddlewareSource } from '@/lib/licensing/middleware-generator'
 
 export async function GET(_request: Request, context: { params: Promise<{ licenseId: string }> }) {
   try {
@@ -15,7 +16,18 @@ export async function GET(_request: Request, context: { params: Promise<{ licens
     if (!license) return NextResponse.json({ error: 'Licença não encontrada.' }, { status: 404 })
     const validRoutes = (routes ?? []).map((route) => ({ ...route, moduleRecord: Array.isArray(route.system_modules) ? route.system_modules[0] : route.system_modules })).filter((route) => route.moduleRecord?.system_id === license.system_id).map((route) => ({ pattern: route.route_pattern, module: route.moduleRecord.internal_code, blockedPath: route.blocked_path }))
     const source = buildMiddlewareSource(validRoutes, `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/api/licenses/validate`)
-    return NextResponse.json({ source, routeCount: validRoutes.length, generatedAt: new Date().toISOString(), warning: validRoutes.length ? null : 'Nenhuma rota protegida foi configurada para esta licença. Cadastre rotas associadas aos módulos do sistema.' })
+    const blockedPageSource = buildBlockedPageSource()
+    const zip = new JSZip()
+    zip.file('middleware.ts', source)
+    zip.file('app/acesso-bloqueado/page.tsx', blockedPageSource)
+    const packageBytes = await zip.generateAsync({ type: 'uint8array' })
+    return new NextResponse(packageBytes, {
+      headers: {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': 'attachment; filename="codexa-rotas-padrao.zip"',
+        'X-Codexa-Route-Count': String(validRoutes.length),
+      },
+    })
   } catch (error) {
     if (error instanceof AdminApiError) return NextResponse.json({ error: error.message }, { status: error.status })
     return NextResponse.json({ error: 'Não foi possível gerar o middleware.' }, { status: 500 })

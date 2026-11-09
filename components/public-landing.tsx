@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowUpRight, Blocks, ChevronRight, Code2, ShieldCheck, Sparkles, Workflow } from 'lucide-react'
 import { PublicContact } from '@/components/public-contact'
+import { LoginTerminal } from '@/components/login-terminal'
 
 const services = [
   { icon: Code2, title: 'Sites que convertem', description: 'Landing pages e sites institucionais rápidos, estratégicos e desenhados para transformar atenção em oportunidade.' },
@@ -20,6 +21,7 @@ const portfolio = [
 export function PublicLanding() {
   return (
     <main className="landing-page relative min-h-screen overflow-x-clip overflow-y-hidden bg-[#07090d] text-slate-100">
+      <LoginTerminal />
       <div className="landing-grid pointer-events-none absolute inset-0 opacity-70" />
       <div className="landing-orb landing-orb-one pointer-events-none absolute -right-40 top-0 size-[34rem] rounded-full blur-3xl" />
       <div className="landing-orb landing-orb-two pointer-events-none absolute left-[-18rem] top-[32rem] size-[30rem] rounded-full blur-3xl" />

@@ -154,3 +154,46 @@ export async function PATCH(request: Request, context: { params: Promise<{ membe
     return fail(error)
   }
 }
+
+export async function DELETE(_request: Request, context: { params: Promise<{ memberId: string }> }) {
+  try {
+    const actor = await requireWorkspacePermission('users', 'manage_users')
+    const { memberId } = await context.params
+    if (!uuidPattern.test(memberId)) return NextResponse.json({ error: 'Identificador inválido.' }, { status: 400 })
+
+    const { data: member, error: memberError } = await actor.supabase
+      .from('team_members')
+      .select('id,user_id,full_name,email,job_title,department,joined_on,role_name,status')
+      .eq('id', memberId)
+      .maybeSingle()
+    if (memberError) throw memberError
+    if (!member) return NextResponse.json({ error: 'Usuário não encontrado.' }, { status: 404 })
+    if (member.user_id === actor.actorId) return NextResponse.json({ error: 'Não é possível excluir a própria conta.' }, { status: 403 })
+
+    const { error: deleteMemberError } = await actor.supabase.from('team_members').delete().eq('id', memberId)
+    if (deleteMemberError) throw deleteMemberError
+
+    if (member.user_id) {
+      const { error: deleteAuthError } = await actor.supabase.auth.admin.deleteUser(member.user_id)
+      if (deleteAuthError) {
+        const { error: restoreError } = await actor.supabase.from('team_members').insert({ id: member.id, user_id: member.user_id, full_name: member.full_name, email: member.email, job_title: member.job_title, department: member.department, joined_on: member.joined_on, role_name: member.role_name, status: member.status })
+        if (restoreError) console.error('Team member restore after auth deletion failure failed:', restoreError.message)
+        console.error('Team auth deletion failed:', deleteAuthError.message)
+        return NextResponse.json({ error: 'Não foi possível excluir a conta de autenticação. O cadastro foi preservado.' }, { status: 502 })
+      }
+    }
+
+    const { error: auditError } = await actor.supabase.from('admin_audit_events').insert({
+      actor_id: actor.actorId,
+      action_name: 'team.deleted',
+      entity_type: 'team_member',
+      entity_id: memberId,
+      previous_data: { email: member.email, full_name: member.full_name, role_name: member.role_name, status: member.status },
+      result: 'success',
+    })
+    if (auditError) console.error('Team deletion audit failed:', auditError.message)
+    return NextResponse.json({ warning: auditError ? 'Usuário excluído, mas a auditoria não pôde ser salva.' : null })
+  } catch (error) {
+    return fail(error)
+  }
+}

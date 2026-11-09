@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Building2, Check, Eye, Inbox, Loader2, MessageSquare, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
+import { ListingControls } from '@/components/listing-controls'
 
 type Module = 'leads' | 'clients' | 'messages'
 type Lead = { id: string; name: string; contact_name: string | null; email: string | null; phone: string | null; status: string; priority: string; source: string | null; created_at: string }
@@ -20,6 +21,8 @@ export function CrmWorkspace({ initialModule = 'leads', permissions = [] }: { in
   const [clients, setClients] = useState<Client[]>([])
   const [messages, setMessages] = useState<Message[]>([])
   const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [page, setPage] = useState(0)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -51,10 +54,13 @@ export function CrmWorkspace({ initialModule = 'leads', permissions = [] }: { in
 
   const filtered = useMemo(() => {
     const term = query.toLowerCase()
-    if (module === 'leads') return leads.filter((item) => `${item.name} ${item.contact_name ?? ''} ${item.email ?? ''}`.toLowerCase().includes(term))
-    if (module === 'clients') return clients.filter((item) => `${item.legal_name} ${item.trade_name ?? ''} ${item.email ?? ''}`.toLowerCase().includes(term))
-    return messages.filter((item) => `${item.sender} ${item.subject} ${item.channel}`.toLowerCase().includes(term))
-  }, [clients, leads, messages, module, query])
+    if (module === 'leads') return leads.filter((item) => `${item.name} ${item.contact_name ?? ''} ${item.email ?? ''}`.toLowerCase().includes(term) && (!statusFilter || item.status === statusFilter))
+    if (module === 'clients') return clients.filter((item) => `${item.legal_name} ${item.trade_name ?? ''} ${item.email ?? ''}`.toLowerCase().includes(term) && (!statusFilter || item.status === statusFilter))
+    return messages.filter((item) => `${item.sender} ${item.subject} ${item.channel}`.toLowerCase().includes(term) && (!statusFilter || item.status === statusFilter))
+  }, [clients, leads, messages, module, query, statusFilter])
+
+  const statusOptions = [...new Set((module === 'leads' ? leads : module === 'clients' ? clients : messages).map((item) => item.status).filter(Boolean))]
+  const pageRows = filtered.slice(page * 10, page * 10 + 10)
 
   async function remove(id: string) {
     if (!canDelete || !window.confirm('Excluir este registro? Esta ação não pode ser desfeita.')) return
@@ -72,10 +78,10 @@ export function CrmWorkspace({ initialModule = 'leads', permissions = [] }: { in
     const data = Object.fromEntries(new FormData(event.currentTarget).entries())
     const table = module === 'leads' ? 'leads' : module === 'clients' ? 'clients' : 'messages'
     const payload = module === 'leads'
-      ? { name: data.name, contact_name: data.contact_name || null, email: data.email || null, phone: data.phone || null, source: data.source || null }
+      ? { name: data.name, contact_name: data.contact_name || null, email: data.email || null, phone: data.phone || null, source: data.source || null, status: 'Novo lead', priority: 'Média' }
       : module === 'clients'
-        ? { legal_name: data.legal_name, trade_name: data.trade_name || null, email: data.email || null, phone: data.phone || null }
-        : { sender: data.sender, subject: data.subject, content: data.content, channel: data.channel || 'Manual' }
+        ? { legal_name: data.legal_name, trade_name: data.trade_name || null, email: data.email || null, phone: data.phone || null, status: 'Ativo' }
+        : { sender: data.sender, subject: data.subject, content: data.content, channel: data.channel || 'Manual', status: 'Novo', priority: 'Média' }
     const { error: insertError } = await createClient().from(table).insert(payload)
     if (insertError) setError(`Não foi possível salvar: ${insertError.message}`)
     else { setModal(false); await loadData() }
@@ -111,13 +117,16 @@ export function CrmWorkspace({ initialModule = 'leads', permissions = [] }: { in
   return <section className="mt-6 rounded-xl border border-white/[0.07] bg-[#11161e]">
     <div className="flex flex-col gap-4 border-b border-white/[0.07] p-5 lg:flex-row lg:items-center lg:justify-between">
       <div><p className="text-xs font-medium uppercase tracking-[0.16em] text-blue-400">CRM operacional</p><h2 className="mt-1 text-lg font-semibold text-white">{title}</h2><p className="mt-1 text-xs text-slate-500">Registros sincronizados com o Supabase.</p></div>
-      <div className="flex flex-wrap gap-2">{([['leads', Inbox, 'Leads'], ['clients', Building2, 'Clientes'], ['messages', MessageSquare, 'Mensagens']] as const).map(([key, Icon, label]) => <button key={key} onClick={() => { setModule(key); setQuery(''); setRecord(null); setEditingRecord(false) }} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium ${module === key ? 'bg-blue-500 text-white' : 'bg-white/[0.04] text-slate-400 hover:text-white'}`}><Icon className="size-3.5" />{label}</button>)}<button disabled={!canCreate} onClick={() => setModal(true)} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"><Plus className="size-3.5" />Novo registro</button></div>
+      <div className="flex flex-wrap gap-2">{([['leads', Inbox, 'Leads'], ['clients', Building2, 'Clientes'], ['messages', MessageSquare, 'Mensagens']] as const).map(([key, Icon, label]) => <button key={key} onClick={() => { setModule(key); setQuery(''); setStatusFilter(''); setPage(0); setRecord(null); setEditingRecord(false) }} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium ${module === key ? 'bg-blue-500 text-white' : 'bg-white/[0.04] text-slate-400 hover:text-white'}`}><Icon className="size-3.5" />{label}</button>)}<button disabled={!canCreate} onClick={() => setModal(true)} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"><Plus className="size-3.5" />Novo registro</button></div>
     </div>
     <div className="flex items-center gap-3 border-b border-white/[0.07] px-5 py-3"><div className="flex flex-1 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2"><Search className="size-4 text-slate-600" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Pesquisar registros..." className="w-full bg-transparent text-xs text-slate-200 outline-none placeholder:text-slate-600" /></div><button onClick={() => void loadData()} className="rounded-lg border border-white/[0.08] px-3 py-2 text-xs text-slate-400 hover:text-white">Atualizar</button></div>
     {error && <div className="mx-5 mt-4 flex items-center justify-between rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-amber-300"><span>{error}</span><button onClick={() => setError('')} aria-label="Fechar aviso"><X className="size-3.5" /></button></div>}
+    <ListingControls total={filtered.length} page={page} onPageChange={setPage} hasActiveFilters={Boolean(statusFilter)} onClear={() => { setStatusFilter(''); setPage(0) }}>
+      <label className="text-xs text-slate-400">Status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(0) }} className={`${inputClass} mt-1 min-w-44`}><option value="">Todos os status</option>{statusOptions.map((status) => <option key={status}>{status}</option>)}</select></label>
+    </ListingControls>
     <div className="overflow-x-auto">{loading ? <div className="flex min-h-40 items-center justify-center text-xs text-slate-500"><Loader2 className="mr-2 size-4 animate-spin" />Carregando registros...</div> : filtered.length === 0 ? <div className="flex min-h-40 flex-col items-center justify-center text-center"><div className="mb-2 grid size-9 place-items-center rounded-full bg-white/[0.04] text-slate-600"><Inbox className="size-4" /></div><p className="text-sm text-slate-400">{empty}</p><p className="mt-1 text-xs text-slate-600">{canCreate ? 'Use “Novo registro” para começar.' : 'Nenhum registro encontrado.'}</p></div> : <table className="w-full text-left text-xs">
       <thead className="border-b border-white/[0.07] text-[10px] uppercase tracking-wider text-slate-600"><tr>{module === 'leads' ? <><th className="px-5 py-3">Nome</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Origem</th></> : module === 'clients' ? <><th className="px-5 py-3">Cliente</th><th className="px-5 py-3">Contato</th><th className="px-5 py-3">Status</th></> : <><th className="px-5 py-3">Remetente</th><th className="px-5 py-3">Assunto</th><th className="px-5 py-3">Canal</th></>}<th className="px-5 py-3 text-right">Ações</th></tr></thead>
-      <tbody>{filtered.map((item) => <tr key={item.id} className="border-b border-white/[0.05] last:border-0">
+      <tbody>{pageRows.map((item) => <tr key={item.id} className="border-b border-white/[0.05] last:border-0">
         <td className="px-5 py-3 font-medium text-slate-200">{module === 'leads' ? (item as Lead).name : module === 'clients' ? (item as Client).legal_name : (item as Message).sender}</td>
         <td className="px-5 py-3 text-slate-400">{module === 'leads' ? (item as Lead).status : module === 'clients' ? ((item as Client).email || (item as Client).phone || 'Sem contato') : (item as Message).subject}</td>
         <td className="px-5 py-3 text-slate-500">{module === 'leads' ? ((item as Lead).source || 'Não informado') : module === 'clients' ? (item as Client).status : (item as Message).channel}</td>

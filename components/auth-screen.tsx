@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from 'react'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
+import { signInWithPassword } from '@/lib/supabase/auth'
 import { Eye, EyeOff, Loader2, LockKeyhole, Mail } from 'lucide-react'
 
 export function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
@@ -33,7 +34,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void })
       if (error) setMessage('Não foi possível enviar o link de recuperação. Confira o e-mail informado.')
       else { setRecoverySent(true); setMessage('Enviamos um link de recuperação para seu e-mail.') }
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password })
+      const { error } = await signInWithPassword(email, password)
       if (error) setMessage(error.message.toLowerCase().includes('email not confirmed') ? 'Confirme seu e-mail antes de entrar.' : 'E-mail ou senha inválidos. Use “Esqueci minha senha” para criar uma nova senha.')
     }
     setLoading(false)

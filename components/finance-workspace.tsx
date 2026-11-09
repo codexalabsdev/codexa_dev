@@ -43,20 +43,26 @@ function getOpenBalance(item: Receivable | Payable) {
   return Math.max(amount - paid, 0)
 }
 
+function isSettledStatus(status: string) {
+  return ['pago', 'recebido', 'quitado', 'paid', 'received', 'settled'].includes(status.trim().toLocaleLowerCase('pt-BR'))
+}
+
 function isOverdue(item: Receivable | Payable) {
-  if (!item.due_date || item.status === 'Pago' || item.status === 'Recebido' || item.status === 'Pago' || item.status === 'Quitado') return false
-  const due = new Date(`${item.due_date}T12:00:00`)
+  if (!item.due_date || isSettledStatus(item.status) || getOpenBalance(item) <= 0) return false
+  const due = new Date(`${item.due_date.slice(0, 10)}T12:00:00`)
   return due.getTime() < Date.now()
 }
 
 function withinRange(dateValue: string | null | undefined, range: RangeOption) {
   if (!dateValue || range === 'all') return true
-  const date = new Date(`${dateValue}T12:00:00`)
+  const date = new Date(`${dateValue.slice(0, 10)}T12:00:00`)
   const now = new Date()
   const offset = range === '30d' ? 30 : 90
   const from = new Date(now)
   from.setDate(now.getDate() - offset)
-  return date >= from && date <= now
+  const to = new Date(now)
+  to.setDate(now.getDate() + offset)
+  return date >= from && date <= to
 }
 
 export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: { initialTab?: FinanceTab; permissions?: string[] }) {
@@ -106,9 +112,13 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
     event.preventDefault()
     const selectedPermission = tab === 'payable' ? 'accounts_payable:create' : 'accounts_receivable:create'
     if (!permissions.includes('*') && !permissions.includes(selectedPermission)) return
+    const amount = Number(form.amount)
+    if (!Number.isFinite(amount) || amount <= 0 || !form.description.trim() || !form.due_date) {
+      setMessage('Informe descrição, valor positivo e vencimento.')
+      return
+    }
     setSaving(true)
     const supabase = createClient()
-    const amount = Number(form.amount)
     const table = tab === 'payable' ? 'accounts_payable' : 'accounts_receivable'
     const payload = tab === 'payable'
       ? { beneficiary: 'A definir', description: form.description, amount, paid_amount: 0, due_date: form.due_date, status: 'Pendente' }
@@ -198,10 +208,10 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
 
   const visibleFinanceRows = tab === 'payable' ? filteredPayables.slice(page * 10, page * 10 + 10) : filteredReceivables.slice(page * 10, page * 10 + 10)
 
-  const outstandingReceivables = filteredReceivables.reduce((sum, item) => sum + getOpenBalance(item), 0)
-  const outstandingPayables = filteredPayables.reduce((sum, item) => sum + getOpenBalance(item), 0)
-  const overdueReceivables = filteredReceivables.filter(isOverdue).reduce((sum, item) => sum + getOpenBalance(item), 0)
-  const overduePayables = filteredPayables.filter(isOverdue).reduce((sum, item) => sum + getOpenBalance(item), 0)
+  const outstandingReceivables = receivables.reduce((sum, item) => sum + getOpenBalance(item), 0)
+  const outstandingPayables = payables.reduce((sum, item) => sum + getOpenBalance(item), 0)
+  const overdueReceivables = receivables.filter(isOverdue).reduce((sum, item) => sum + getOpenBalance(item), 0)
+  const overduePayables = payables.filter(isOverdue).reduce((sum, item) => sum + getOpenBalance(item), 0)
   const netCash = outstandingReceivables - outstandingPayables
 
   const periodReceivables = filteredReceivables.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0)
@@ -257,9 +267,9 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
 
       const entry = monthEntries.get(key)!
       if ('beneficiary' in item) {
-        entry.outflow += Number(item.paid_amount || item.amount || 0)
+        entry.outflow += Number(item.paid_amount || 0)
       } else {
-        entry.inflow += Number(item.paid_amount || item.final_amount || 0)
+        entry.inflow += Number(item.paid_amount || 0)
       }
     })
 
