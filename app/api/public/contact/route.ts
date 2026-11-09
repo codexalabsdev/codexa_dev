@@ -49,7 +49,9 @@ export async function POST(request: Request) {
     const { data: savedMessage, error } = await supabase.from('public_contact_messages').insert({ sender_name: name, sender_email: email, company, sector, employee_id: employeeId, subject, body, source: 'landing_page' }).select('id').single()
     if (error || !savedMessage) return NextResponse.json({ error: 'Não foi possível registrar a mensagem.' }, { status: 500 })
     if (!recipientUserId) return NextResponse.json({ error: 'O destinatário não possui uma conta ativa para receber a mensagem.' }, { status: 409 })
-    const { error: notificationError } = await supabase.from('notifications').insert({ recipient_id: recipientUserId, notification_type: 'public_contact_message', entity_type: 'public_contact_message', entity_id: savedMessage.id, message: `Nova mensagem de ${name}: ${subject}`, link_path: '/admin' })
+    const { data: crmMessage, error: crmMessageError } = await supabase.from('messages').insert({ sender: name, company, email, channel: 'Formulário do site', subject, content: body, received_at: new Date().toISOString(), responsible_id: recipientUserId, priority: 'Média', status: 'Nova' }).select('id').single()
+    if (crmMessageError || !crmMessage) return NextResponse.json({ error: 'A mensagem foi registrada, mas não foi possível encaminhá-la para o CRM.' }, { status: 502 })
+    const { error: notificationError } = await supabase.from('notifications').insert({ recipient_id: recipientUserId, notification_type: 'public_contact_message', entity_type: 'message', entity_id: crmMessage.id, message: `Nova mensagem de ${name}: ${subject}`, link_path: '/workspace/contatos' })
     if (notificationError) return NextResponse.json({ error: 'A mensagem foi registrada, mas não foi possível entregá-la ao destinatário.' }, { status: 502 })
   } else {
     const category = String(form.get('category') ?? 'Técnico')
