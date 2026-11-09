@@ -1,0 +1,16 @@
+'use client'
+
+import { FormEvent, useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { LockKeyhole, Loader2 } from 'lucide-react'
+
+export default function ResetPasswordPage() {
+  const [password, setPassword] = useState('')
+  const [confirmation, setConfirmation] = useState('')
+  const [ready, setReady] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  useEffect(() => { async function checkRecoverySession() { const result = await createClient().auth.getSession(); setReady(Boolean(result.data.session)); if (!result.data.session) setMessage('O link expirou ou já foi utilizado. Solicite um novo link de recuperação.') }; void checkRecoverySession() }, [])
+  async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (password.length < 8 || password !== confirmation) { setMessage(password.length < 8 ? 'A senha precisa ter pelo menos 8 caracteres.' : 'As senhas não coincidem.'); return }; setSaving(true); setMessage(''); const { error } = await createClient().auth.updateUser({ password }); if (error) setMessage('Não foi possível salvar a nova senha. Solicite outro link.'); else { setMessage('Senha redefinida com sucesso. Você já pode acessar o workspace.'); setReady(false) }; setSaving(false) }
+  return <main className="grid min-h-screen place-items-center bg-[#080b10] px-4 py-8 text-slate-100"><form onSubmit={submit} className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#11161e] p-7 shadow-2xl sm:p-9"><div className="mb-7"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">Codexa</p><h1 className="mt-3 text-2xl font-semibold text-white">Redefinir senha</h1><p className="mt-2 text-sm text-slate-500">Escolha uma nova senha para continuar protegendo sua conta.</p></div>{ready && <div className="space-y-4"><label className="block text-xs font-medium text-slate-300">Nova senha<div className="mt-2 flex items-center gap-2 rounded-lg border border-white/[0.09] bg-white/[0.03] px-3"><LockKeyhole className="size-4 text-slate-400" /><input required minLength={8} type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" className="w-full bg-transparent py-3 text-sm text-white outline-none" /></div></label><label className="block text-xs font-medium text-slate-300">Confirmar nova senha<div className="mt-2 flex items-center gap-2 rounded-lg border border-white/[0.09] bg-white/[0.03] px-3"><LockKeyhole className="size-4 text-slate-400" /><input required minLength={8} type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="new-password" className="w-full bg-transparent py-3 text-sm text-white outline-none" /></div></label><button disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-lg bg-violet-500 py-3 text-sm font-semibold text-white disabled:opacity-60">{saving && <Loader2 className="size-4 animate-spin" />}Salvar nova senha</button></div>}{message && <p role="status" className="mt-5 rounded-lg border border-cyan-400/20 bg-cyan-400/5 px-3 py-2 text-sm text-cyan-200">{message}</p>}<a href="/" className="mt-5 block text-center text-xs text-slate-500 hover:text-slate-300">Voltar para o login</a></form></main>
+}

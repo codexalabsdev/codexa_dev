@@ -1,0 +1,70 @@
+/* Workspace visual contract: semantic tokens win over legacy utility colors. */
+.workspace-shell {
+  font-size: var(--font-size-base, 0.875rem);
+  font-weight: var(--font-weight-base, 400);
+  line-height: var(--line-height-base, 1.5);
+  letter-spacing: var(--letter-spacing-base, 0);
+}
+
+.workspace-shell button,
+.workspace-shell input,
+.workspace-shell select,
+.workspace-shell textarea {
+  border-radius: var(--button-radius, 0.75rem);
+}
+
+.workspace-shell .rounded-xl,
+.workspace-shell .rounded-2xl,
+.workspace-shell .rounded-3xl {
+  border-radius: var(--card-radius, 0.75rem);
+}
+
+[data-theme] .workspace-shell [class*='bg-[#'] {
+  background-color: var(--workspace-surface) !important;
+}
+
+[data-theme] .workspace-shell [class*='bg-white/'] {
+  background-color: color-mix(in srgb, var(--workspace-text) 5%, transparent) !important;
+}
+
+[data-theme] .workspace-shell [class*='border-white/'],
+[data-theme] .workspace-shell [class*='border-white'] {
+  border-color: color-mix(in srgb, var(--workspace-border) 72%, transparent) !important;
+}
+
+[data-theme] .workspace-shell [class*='text-slate-100'],
+[data-theme] .workspace-shell [class*='text-slate-200'],
+[data-theme] .workspace-shell [class*='text-slate-300'],
+[data-theme] .workspace-shell [class*='text-slate-400'],
+[data-theme] .workspace-shell [class*='text-slate-500'],
+[data-theme] .workspace-shell [class*='text-slate-600'] {
+  color: var(--workspace-muted) !important;
+}
+
+[data-theme] .workspace-shell [class*='text-slate-100'],
+[data-theme] .workspace-shell [class*='text-slate-200'] {
+  color: var(--workspace-text) !important;
+}
+
+[data-theme] .workspace-shell [class*='text-blue-400'],
+[data-theme] .workspace-shell [class*='text-blue-300'],
+[data-theme] .workspace-shell [class*='text-violet-400'],
+[data-theme] .workspace-shell [class*='text-emerald-400'] {
+  color: var(--primary-custom, var(--primary)) !important;
+}
+
+.workspace-shell :focus-visible {
+  outline: 2px solid var(--focus-color, var(--ring));
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-shell *,
+  .workspace-shell *::before,
+  .workspace-shell *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
