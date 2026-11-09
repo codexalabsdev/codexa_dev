@@ -277,7 +277,7 @@ html[data-font] button[class~='bg-white'], html[data-font] button[class*='bg-whi
 body { font-size: var(--font-size-base, 16px); font-weight: var(--font-weight-base, 400); line-height: var(--line-height-base, 1.5); letter-spacing: var(--letter-spacing-base, 0); }
 button, [role='button'] { border-radius: var(--button-radius, 0.65rem); }
 .workspace-shell [class*='rounded-xl'], .workspace-shell [class*='rounded-2xl'], .workspace-shell [class*='rounded-3xl'] { border-radius: var(--card-radius, 0.75rem); }
-.workspace-shell [class*='shadow-'] { --tw-shadow-color: color-mix(in srgb, var(--workspace-text) var(--shadow-strength, 20%), transparent); }
+.workspace-shell [class*='shadow-'] { --tw-shadow-color: color-mix(in srgb, var(--workspace-shadow-color, #000000) var(--shadow-strength, 20%), transparent); }
 :focus-visible { outline: 2px solid var(--focus-color, var(--ring)); outline-offset: 2px; }
 .field {
   @apply w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-sm text-slate-200 outline-none placeholder:text-slate-500;
