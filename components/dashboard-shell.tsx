@@ -294,17 +294,15 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
     if (notification.read_at) return
     const readAt = new Date().toISOString()
     try {
-      const { data, error } = await createClient().from('notifications')
-        .update({ read_at: readAt })
-        .eq('id', notification.id)
-        .select('id')
-        .maybeSingle()
-      if (error || !data) {
-        console.error('Workspace notification update failed:', error?.message ?? 'No notification row was updated')
-        setNotificationsError('Não foi possível marcar a notificação como lida.')
-        return
-      }
-      setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, read_at: readAt } : item))
+  const { error } = await createClient().from('notifications')
+  .update({ read_at: readAt })
+  .eq('id', notification.id)
+  if (error) {
+  console.error('Workspace notification update failed:', error.message)
+  setNotificationsError('Não foi possível marcar a notificação como lida.')
+  return
+  }
+  setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, read_at: readAt } : item))
     } catch (error) {
       console.error('Workspace notification update request failed:', error)
       setNotificationsError('Não foi possível marcar a notificação como lida.')
