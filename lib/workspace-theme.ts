@@ -1,5 +1,4 @@
 export type WorkspaceTheme = 'dark' | 'light' | 'system'
-export type AccentColor = 'blue' | 'violet' | 'emerald' | 'amber' | 'rose'
 export type FontFamily = 'inter' | 'roboto' | 'open-sans' | 'lato' | 'montserrat' | 'poppins' | 'nunito-sans' | 'manrope' | 'dm-sans' | 'plus-jakarta' | 'outfit' | 'source-sans-3' | 'ibm-plex-sans' | 'work-sans' | 'merriweather' | 'playfair-display' | 'ibm-plex-mono'
 export type RadiusScale = 'small' | 'medium' | 'large'
 export type ContrastMode = 'normal' | 'high'
@@ -8,8 +7,6 @@ export type MotionMode = 'full' | 'reduced'
 export type WorkspaceAppearance = {
   theme: WorkspaceTheme
   primary_color: string
-  secondary_color: string
-  tertiary_color: string
   background_color: string
   surface_color: string
   sidebar_color: string
@@ -27,7 +24,7 @@ export type WorkspaceAppearance = {
   card_radius: number
   shadow_strength: number
   appearance_palette: string
-  accent_color: AccentColor
+  icon_color: string
   font_family: FontFamily
   radius_scale: RadiusScale
   contrast_mode: ContrastMode
@@ -36,11 +33,26 @@ export type WorkspaceAppearance = {
   table_density?: 'comfortable' | 'compact'
 }
 
+const legacyAccentColors: Record<string, string> = {
+  blue: '#6485ff',
+  violet: '#9b7cff',
+  emerald: '#42c995',
+  amber: '#f2b84b',
+  rose: '#e77986',
+}
+
+export function resolveIconColor(palette: string | null | undefined, legacyAccent: string | null | undefined) {
+  try {
+    const parsed = palette ? JSON.parse(palette) as { icon_color?: unknown } : null
+    if (typeof parsed?.icon_color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(parsed.icon_color)) return parsed.icon_color
+  } catch {}
+  if (typeof legacyAccent === 'string' && /^#[0-9A-Fa-f]{6}$/.test(legacyAccent)) return legacyAccent
+  return legacyAccentColors[legacyAccent ?? ''] ?? '#6485ff'
+}
+
 const defaultAppearance: WorkspaceAppearance = {
   theme: 'dark',
   primary_color: '#6485ff',
-  secondary_color: '#9b7cff',
-  tertiary_color: '#42c995',
   background_color: '#090b10',
   surface_color: '#11161e',
   sidebar_color: '#0d1118',
@@ -58,7 +70,7 @@ const defaultAppearance: WorkspaceAppearance = {
   card_radius: 0.75,
   shadow_strength: 20,
   appearance_palette: 'custom',
-  accent_color: 'blue',
+  icon_color: '#6485ff',
   font_family: 'inter',
   radius_scale: 'medium',
   contrast_mode: 'normal',
@@ -103,17 +115,13 @@ function darken(hex: string, amount: number) {
 export function applyWorkspaceAppearance(appearance: WorkspaceAppearance): void {
   const root = document.documentElement
   root.style.setProperty('--primary-custom', appearance.primary_color)
-  root.style.setProperty('--secondary-custom', appearance.secondary_color)
-  root.style.setProperty('--tertiary-custom', appearance.tertiary_color)
   root.style.setProperty('--primary-custom-rgb', hexToRgb(appearance.primary_color))
-  root.style.setProperty('--secondary-custom-rgb', hexToRgb(appearance.secondary_color))
-  root.style.setProperty('--tertiary-custom-rgb', hexToRgb(appearance.tertiary_color))
   const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches
   const resolvedTheme = appearance.theme === 'system' ? (prefersLight ? 'light' : 'dark') : appearance.theme
   const isLight = resolvedTheme === 'light'
   const background = isLight ? lighten(appearance.background_color, 0.82) : appearance.background_color
   const surface = isLight ? lighten(appearance.surface_color, 0.78) : appearance.surface_color
-  const sidebar = isLight ? lighten(appearance.sidebar_color, 0.8) : appearance.sidebar_color
+  const sidebar = appearance.sidebar_color
   const primaryText = contrastText(appearance.primary_color)
   const mainText = isLight ? darken(appearance.text_color, 0.72) : appearance.text_color
   const mutedText = isLight ? darken(appearance.muted_text_color, 0.2) : appearance.muted_text_color
@@ -121,7 +129,7 @@ export function applyWorkspaceAppearance(appearance: WorkspaceAppearance): void 
   root.style.setProperty('--workspace-background', background)
   root.style.setProperty('--workspace-surface', surface)
   root.style.setProperty('--workspace-sidebar', sidebar)
-  root.style.setProperty('--workspace-header', isLight ? lighten(appearance.header_color, 0.82) : appearance.header_color)
+  root.style.setProperty('--workspace-header', appearance.header_color)
   root.style.setProperty('--workspace-theme-scheme', isLight ? 'light' : 'dark')
   root.style.setProperty('--workspace-text', mainText)
   root.style.setProperty('--workspace-muted', mutedText)
@@ -137,10 +145,11 @@ export function applyWorkspaceAppearance(appearance: WorkspaceAppearance): void 
   root.style.setProperty('--text-inverse', primaryText)
   root.style.setProperty('--text-link', appearance.primary_color)
   root.style.setProperty('--text-info', appearance.primary_color)
-  root.style.setProperty('--text-accent', appearance.secondary_color)
-  root.style.setProperty('--text-success', appearance.tertiary_color)
-  root.style.setProperty('--text-warning', appearance.secondary_color)
-  root.style.setProperty('--text-danger', appearance.accent_color === 'rose' ? appearance.primary_color : '#e77986')
+  root.style.setProperty('--text-accent', appearance.primary_color)
+  root.style.setProperty('--text-success', appearance.primary_color)
+  root.style.setProperty('--text-warning', appearance.primary_color)
+  root.style.setProperty('--text-danger', '#e77986')
+  root.style.setProperty('--icon-color', appearance.icon_color)
   root.style.setProperty('--border-default', appearance.border_color)
   root.style.setProperty('--border-subtle', isLight ? lighten(appearance.border_color, 0.35) : appearance.border_color)
   root.style.setProperty('--border-strong', appearance.border_color)
@@ -148,13 +157,13 @@ export function applyWorkspaceAppearance(appearance: WorkspaceAppearance): void 
   root.style.setProperty('--button-primary-bg', appearance.primary_color)
   root.style.setProperty('--button-primary-text', primaryText)
   root.style.setProperty('--button-primary-hover', hover)
-  root.style.setProperty('--button-secondary-bg', appearance.secondary_color)
-  root.style.setProperty('--button-secondary-text', contrastText(appearance.secondary_color))
-  root.style.setProperty('--button-secondary-hover', isLight ? darken(appearance.secondary_color, 0.08) : lighten(appearance.secondary_color, 0.08))
+  root.style.setProperty('--button-secondary-bg', appearance.primary_color)
+  root.style.setProperty('--button-secondary-text', primaryText)
+  root.style.setProperty('--button-secondary-hover', hover)
   root.style.setProperty('--button-disabled-bg', isLight ? '#e5e7eb' : '#273142')
   root.style.setProperty('--button-disabled-text', isLight ? '#6b7280' : '#94a3b8')
   root.style.setProperty('--interactive-focus', appearance.focus_color)
-  root.style.setProperty('--interactive-selected', appearance.primary_color)
+  root.style.setProperty('--interactive-selected', appearance.focus_color)
   root.style.setProperty('--interactive-hover', hover)
   root.style.setProperty('--focus-color', appearance.focus_color)
   const fontFamilies: Record<FontFamily, string> = {
@@ -180,19 +189,18 @@ export function applyWorkspaceAppearance(appearance: WorkspaceAppearance): void 
   root.style.setProperty('--input', appearance.border_color)
   root.style.setProperty('--primary', appearance.primary_color)
   root.style.setProperty('--primary-foreground', primaryText)
-  root.style.setProperty('--secondary-foreground', contrastText(appearance.secondary_color))
+  root.style.setProperty('--secondary-foreground', primaryText)
   root.style.setProperty('--ring', appearance.focus_color)
   root.style.setProperty('--sidebar-primary', appearance.primary_color)
   root.style.setProperty('--chart-1', appearance.primary_color)
-  root.style.setProperty('--chart-2', appearance.secondary_color)
-  root.style.setProperty('--chart-3', appearance.tertiary_color)
-  root.style.setProperty('--secondary', appearance.secondary_color)
-  root.style.setProperty('--accent', appearance.tertiary_color)
+  root.style.setProperty('--chart-2', appearance.primary_color)
+  root.style.setProperty('--chart-3', appearance.primary_color)
+  root.style.setProperty('--secondary', appearance.primary_color)
+  root.style.setProperty('--accent', appearance.primary_color)
   root.dataset.theme = resolvedTheme
   root.dataset.themePreference = appearance.theme
   root.classList.toggle('light', resolvedTheme === 'light')
   root.classList.toggle('dark', resolvedTheme === 'dark')
-  root.dataset.accent = appearance.accent_color
   root.dataset.font = appearance.font_family
   root.dataset.radius = appearance.radius_scale
   root.dataset.contrast = appearance.contrast_mode

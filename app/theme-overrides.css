@@ -23,11 +23,16 @@
 }
 
 .workspace-shell button,
-.workspace-shell input,
-.workspace-shell select,
-.workspace-shell textarea {
-  border-radius: var(--button-radius, 0.75rem);
-}
+  .workspace-shell button {
+    border-radius: var(--button-radius, 0.75rem);
+  }
+
+  .workspace-shell input,
+  .workspace-shell select,
+  .workspace-shell textarea {
+    border-radius: var(--button-radius, 0.75rem);
+  }
+
 
 .workspace-shell .rounded-xl,
 .workspace-shell .rounded-2xl,
@@ -37,6 +42,63 @@
 
 [data-theme] .workspace-shell [class*='bg-[#'] {
   background-color: var(--workspace-surface) !important;
+}
+
+[data-theme] .workspace-shell {
+  background-color: var(--workspace-background) !important;
+}
+
+[data-theme] .workspace-shell .workspace-sidebar {
+  background-color: var(--workspace-sidebar) !important;
+  border-color: var(--workspace-border) !important;
+}
+
+[data-theme] .workspace-shell .workspace-header {
+  background-color: var(--workspace-header) !important;
+  border-color: var(--workspace-border) !important;
+}
+
+.workspace-shell .workspace-nav-active {
+  border-left-color: var(--interactive-selected) !important;
+  background-color: color-mix(in srgb, var(--interactive-selected) 14%, transparent) !important;
+  color: var(--workspace-text) !important;
+}
+
+.workspace-shell svg {
+  color: var(--icon-color) !important;
+}
+
+.workspace-shell .workspace-nav-icon-active {
+  color: var(--interactive-selected) !important;
+}
+
+.workspace-shell .workspace-sidebar button:not(.workspace-nav-active) {
+  color: var(--workspace-muted) !important;
+}
+
+.workspace-shell .workspace-sidebar button:not(.workspace-nav-active):hover {
+  color: var(--workspace-text) !important;
+}
+
+.workspace-shell .workspace-sidebar button:not(.workspace-nav-active) > svg {
+  color: var(--icon-color) !important;
+}
+
+.workspace-shell .workspace-sidebar button.workspace-nav-active > svg {
+  color: var(--interactive-selected) !important;
+}
+
+[data-theme] .workspace-shell [class*='bg-blue-400/'],
+[data-theme] .workspace-shell [class*='bg-blue-500/'] {
+  background-color: color-mix(in srgb, var(--primary-custom) 12%, transparent) !important;
+}
+
+[data-theme] .workspace-shell [class*='bg-blue-500']:not([class*='/']) {
+  background-color: var(--primary-custom) !important;
+}
+
+[data-theme] .workspace-shell [class*='hover:bg-blue-400']:hover {
+  background-color: var(--primary-custom) !important;
 }
 
 [data-theme] .workspace-shell [class*='bg-white/'] {
@@ -67,21 +129,12 @@
   color: var(--text-info) !important;
 }
 
-[data-theme] .workspace-shell :not(button)[class*='text-violet-400'] {
-  color: var(--text-accent) !important;
-}
-
-[data-theme] .workspace-shell :not(button)[class*='text-emerald-400'] {
-  color: var(--text-success) !important;
-}
-
-/* Page eyebrow labels are secondary copy, never action/button color. */
 [data-theme] .workspace-shell :not(button)[class*='uppercase'][class*='tracking-'] {
   color: var(--workspace-muted, var(--muted-foreground)) !important;
 }
 
 .workspace-shell :focus-visible {
-  outline: 2px solid var(--focus-color, var(--ring));
+  outline: 2px solid var(--interactive-focus, var(--ring));
   outline-offset: 2px;
 }
 

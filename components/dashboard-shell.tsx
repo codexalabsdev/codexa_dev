@@ -21,7 +21,7 @@ import { UserAvatar } from '@/components/user-avatar'
 import { createClient } from '@/lib/supabase/client'
 import { hasWorkspaceAccess } from '@/lib/workspace-access'
 import { workspaceLabel } from '@/lib/workspace-modules'
-import { applyWorkspaceAppearance, defaultAppearance, type WorkspaceAppearance } from '@/lib/workspace-theme'
+import { applyWorkspaceAppearance, defaultAppearance, resolveIconColor, type WorkspaceAppearance } from '@/lib/workspace-theme'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChartLine, faUserPlus, faUsers, faAddressBook, faFileSignature, faFileContract, faDiagramProject, faListCheck, faCodePullRequest, faHeadset, faServer, faPuzzlePiece, faLayerGroup, faKey, faArrowTrendUp, faArrowTrendDown, faChartPie, faUserShield, faUserGear, faShieldHalved, faClockRotateLeft, faUserCircle, faPalette, faGear, faMedal, faTrophy, faFolderOpen, faSliders } from '@fortawesome/free-solid-svg-icons'
 import {
@@ -113,10 +113,10 @@ const sectionSlugs: Record<string, string> = {
 
 const metrics = [
   { label: 'Leads ativos', value: '0', hint: 'Nenhum lead cadastrado', icon: faUserPlus, tone: 'blue' },
-  { label: 'Clientes ativos', value: '0', hint: 'Nenhum cliente cadastrado', icon: faUsers, tone: 'violet' },
+  { label: 'Clientes ativos', value: '0', hint: 'Nenhum cliente cadastrado', icon: faUsers, tone: 'blue' },
   { label: 'Projetos em andamento', value: '0', hint: 'Nenhum projeto cadastrado', icon: faDiagramProject, tone: 'cyan' },
   { label: 'Chamados abertos', value: '0', hint: 'Nenhum chamado aberto', icon: faHeadset, tone: 'amber' },
-  { label: 'Contratos ativos', value: '0', hint: 'Nenhum contrato cadastrado', icon: faFileContract, tone: 'emerald' },
+  { label: 'Contratos ativos', value: '0', hint: 'Nenhum contrato cadastrado', icon: faFileContract, tone: 'blue' },
   { label: 'Valores a receber', value: 'R$ 0,00', hint: 'Nenhum lançamento pendente', icon: faArrowTrendUp, tone: 'teal' },
   { label: 'Valores vencidos', value: 'R$ 0,00', hint: 'Nenhum lançamento vencido', icon: faArrowTrendDown, tone: 'rose' },
   { label: 'Receita no mês', value: 'R$ 0,00', hint: 'Nenhum recebimento registrado', icon: faChartLine, tone: 'indigo' },
@@ -124,10 +124,8 @@ const metrics = [
 
 const toneClasses: Record<string, string> = {
   blue: 'bg-blue-500/10 text-blue-400',
-  violet: 'bg-violet-500/10 text-violet-400',
   cyan: 'bg-cyan-500/10 text-cyan-400',
   amber: 'bg-amber-500/10 text-amber-400',
-  emerald: 'bg-emerald-500/10 text-emerald-400',
   teal: 'bg-teal-500/10 text-teal-400',
   rose: 'bg-rose-500/10 text-rose-400',
   indigo: 'bg-indigo-500/10 text-indigo-400',
@@ -167,6 +165,12 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
   }, [initialSection, pathname])
 
   useEffect(() => {
+    const activeGroup = navigationGroups.find((group) => group.items.some((item) => item.label === activeSection))
+    if (!activeGroup) return
+    setOpenNavGroups((current) => current.has(activeGroup.label) ? current : new Set([...current, activeGroup.label]))
+  }, [activeSection])
+
+  useEffect(() => {
     let active = true
     void fetch('/api/workspace/profile', { cache: 'no-store' }).then(async (response) => {
       if (!response.ok || !active) return
@@ -188,11 +192,12 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
       if (authError || !authData.user) return
       const { data, error } = await supabase
         .from('user_preferences')
-        .select('theme,primary_color,secondary_color,tertiary_color,background_color,surface_color,sidebar_color,header_color,text_color,muted_text_color,border_color,focus_color,font_size_base,heading_scale,font_weight,line_height,letter_spacing,button_radius,card_radius,shadow_strength,appearance_palette,accent_color,font_family,radius_scale,contrast_mode,motion_mode')
+        .select('theme,primary_color,background_color,surface_color,sidebar_color,header_color,text_color,muted_text_color,border_color,focus_color,font_size_base,heading_scale,font_weight,line_height,letter_spacing,button_radius,card_radius,shadow_strength,appearance_palette,accent_color,font_family,radius_scale,contrast_mode,motion_mode')
         .eq('user_id', authData.user.id)
         .maybeSingle()
       if (!active || error) return
-      loadedAppearance = { ...defaultAppearance, ...(data as Partial<WorkspaceAppearance> | null) }
+      const loaded = data as (Partial<WorkspaceAppearance> & { accent_color?: string }) | null
+      loadedAppearance = { ...defaultAppearance, ...(loaded ?? {}), icon_color: resolveIconColor(loaded?.appearance_palette, loaded?.accent_color) }
       applyWorkspaceAppearance(loadedAppearance)
     }
     void loadAppearance()
@@ -342,7 +347,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
 
   return (
     <div className="workspace-shell min-h-screen bg-[#090b10] text-slate-100">
-      <aside className={`workspace-sidebar fixed inset-y-0 left-0 z-40 flex w-[258px] flex-col border-r border-white/[0.08] bg-[#0d1118] transition-transform duration-200 lg:translate-x-0 ${collapsed ? 'lg:w-[78px]' : ''} ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`workspace-sidebar fixed inset-y-0 left-0 z-40 flex w-[258px] flex-col border-r border-white/[0.08] bg-[var(--workspace-sidebar)] transition-transform duration-200 lg:translate-x-0 ${collapsed ? 'lg:w-[78px]' : ''} ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex h-24 items-center border-b border-white/[0.08] px-3">
           <div className="flex min-w-0 flex-1 items-center justify-center">
             <Image src="/codexa-logo.png" alt="Codexa" width={150} height={150} priority className={`shrink-0 object-contain ${collapsed ? 'size-16' : 'size-24'}`} />
@@ -364,7 +369,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
                 {visibleItems.map((item) => {
                   const icon = item.icon
                   const isActive = activeSection === item.label
-                  return <button key={item.label} onClick={() => openSection(item.label)} className={`group relative flex min-h-10 items-center gap-3 rounded-lg border-l-2 px-3 py-2 text-left text-[13px] transition-colors ${isActive ? 'border-blue-400 bg-blue-400/10 font-medium text-blue-200' : 'border-transparent text-slate-400 hover:bg-white/[0.04] hover:text-slate-100'} ${collapsed ? 'justify-center px-0' : ''}`} title={collapsed ? item.label : undefined} aria-current={isActive ? 'page' : undefined}><FontAwesomeIcon icon={icon} className={`size-3.5 shrink-0 ${isActive ? 'text-blue-300' : 'text-slate-500 group-hover:text-slate-300'}`} />{!collapsed && <span className="truncate">{item.label}</span>}</button>
+                  return <button key={item.label} onClick={() => openSection(item.label)} className={`group relative flex min-h-10 items-center gap-3 rounded-lg border-l-2 px-3 py-2 text-left text-[13px] transition-colors ${isActive ? 'workspace-nav-active font-medium' : 'border-transparent text-slate-400 hover:bg-white/[0.04] hover:text-slate-100'} ${collapsed ? 'justify-center px-0' : ''}`} title={collapsed ? item.label : undefined} aria-current={isActive ? 'page' : undefined}><FontAwesomeIcon icon={icon} className={`size-3.5 shrink-0 ${isActive ? 'workspace-nav-icon-active' : 'text-slate-500 group-hover:text-slate-300'}`} />{!collapsed && <span className="truncate">{item.label}</span>}</button>
                 })}
               </div>}
             </div>
@@ -374,7 +379,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
       </aside>
       {mobileOpen && <button className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setMobileOpen(false)} aria-label="Fechar menu" />}
       <div className={`transition-[margin] duration-200 ${collapsed ? 'lg:ml-[78px]' : 'lg:ml-[258px]'}`}>
-        <header className="workspace-header sticky top-0 z-20 flex min-h-[72px] flex-wrap items-center gap-2 border-b border-white/[0.08] bg-[#090b10]/88 px-3 py-2 backdrop-blur-xl sm:gap-4 sm:px-7">
+        <header className="workspace-header sticky top-0 z-20 flex min-h-[72px] flex-wrap items-center gap-2 border-b border-white/[0.08] bg-[var(--workspace-header)] px-3 py-2 backdrop-blur-xl sm:gap-4 sm:px-7">
           <button className="rounded-md p-2 text-slate-400 hover:bg-white/5 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Abrir menu"><Menu className="size-5" /></button>
           <div className="hidden items-center gap-2 text-xs text-slate-500 sm:flex"><span>Workspace</span><ChevronRight className="size-3" /><span className="text-slate-300">{activeSection}</span></div>
           <div className="ml-auto flex items-center gap-2">
