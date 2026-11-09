@@ -89,8 +89,10 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
 
   async function load() {
     setLoading(true)
-    const supabase = createClient()
-    const [receivableResult, payableResult, recurringResult] = await Promise.all([
+  const supabase = createClient()
+  const { error: generationError } = await supabase.rpc('generate_financial_recurring_cycles', { p_until: new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10) })
+  if (generationError) setMessage(`Não foi possível gerar recorrências: ${generationError.message}`)
+  const [receivableResult, payableResult, recurringResult] = await Promise.all([
       supabase.from('accounts_receivable').select('id,description,category,original_amount,final_amount,paid_amount,due_date,status,created_at,recurring_schedule_id,recurring_cycle_key').order('due_date'),
       supabase.from('accounts_payable').select('id,beneficiary,description,amount,paid_amount,due_date,status,created_at,recurring_schedule_id,recurring_cycle_key').order('due_date'),
       supabase.from('financial_recurring_schedules').select('id,description,kind,amount,category,beneficiary,frequency,anchor_day,first_due_date,end_date,status,next_due_date,last_generated_date').order('next_due_date'),
@@ -106,7 +108,6 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
   }
 
   useEffect(() => { void load() }, [])
-  useEffect(() => { if (tab === 'recurring') void createClient().rpc('generate_financial_recurring_cycles', { p_until: new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10) }).then(() => void load()) }, [tab])
 
   async function createEntry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -165,9 +166,10 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
 
   async function deleteRecurring(item: RecurringSchedule) {
     if (!canDelete || !window.confirm(`Excluir a recorrência “${item.description}”? Os lançamentos já gerados serão preservados.`)) return
-    const { error } = await createClient().from('financial_recurring_schedules').delete().eq('id', item.id)
-    if (error) setMessage(`Não foi possível excluir a recorrência: ${error.message}`)
-    else { if (editingRecurringId === item.id) setEditingRecurringId(null); setMessage('Recorrência excluída.'); await load() }
+  const { data: deletedRows, error } = await createClient().from('financial_recurring_schedules').delete().eq('id', item.id).select('id')
+  if (error) setMessage(`Não foi possível excluir a recorrência: ${error.message}`)
+  else if (!deletedRows?.length) setMessage('A recorrência não foi excluída. Verifique sua permissão para excluir registros financeiros.')
+  else { if (editingRecurringId === item.id) setEditingRecurringId(null); setMessage('Recorrência excluída.'); await load() }
   }
 
   async function deleteRecord(item: FinanceRecord) {
