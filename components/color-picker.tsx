@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { MouseEvent as ReactMouseEvent } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 
 type ColorPickerProps = { value: string; label: string; onChange: (value: string) => void }
 type Rgb = [number, number, number]
@@ -13,7 +13,10 @@ function normalizeHex(value: string) {
 
 function hexToRgb(value: string): Rgb {
   const hex = normalizeHex(value) ?? '#6485ff'
-  return [0, 1, 2].map((index) => Number.parseInt(hex.slice(1 + index * 2, 3 + index * 2), 16)) as Rgb
+  return [0, 1, 2].map((index) => {
+    const channel = Number.parseInt(hex.slice(1 + index * 2, 3 + index * 2), 16)
+    return Number.isFinite(channel) ? channel : 0
+  }) as Rgb
 }
 
 function rgbToHex(rgb: Rgb) {
@@ -77,7 +80,7 @@ export function ColorPicker({ value, label, onChange }: ColorPickerProps) {
     if (rawValue !== '' && !Number.isNaN(parsed)) commitRgb(next)
   }
 
-  function updateSurface(event: ReactMouseEvent<HTMLDivElement>) {
+  function updateSurface(event: ReactPointerEvent<HTMLDivElement>) {
     const box = event.currentTarget.getBoundingClientRect()
     const saturation = Math.max(0, Math.min(1, (event.clientX - box.left) / box.width))
     const brightness = Math.max(0, Math.min(1, 1 - (event.clientY - box.top) / box.height))
@@ -87,12 +90,12 @@ export function ColorPicker({ value, label, onChange }: ColorPickerProps) {
   return <div ref={ref} className="relative">
     <button type="button" aria-label={`Abrir seletor da cor ${label}`} aria-expanded={open} onClick={() => setOpen((current) => !current)} className="h-10 w-full rounded-lg border border-[var(--border-default)] p-1.5 text-left" style={{ backgroundColor: value }}><span className="block h-full rounded-md border border-black/10" style={{ backgroundColor: value }} /></button>
     {open && <div className="absolute z-50 mt-2 w-72 rounded-xl border border-[var(--border-default)] bg-[var(--background-elevated,var(--card))] p-3 shadow-2xl">
-      <div className="relative h-32 cursor-crosshair overflow-hidden rounded-lg" style={{ backgroundColor: `hsl(${hsv.hue} 100% 50%)`, backgroundImage: 'linear-gradient(to right, #fff, transparent), linear-gradient(to top, #000, transparent)' }} onClick={updateSurface}>
+      <div className="relative h-32 cursor-crosshair overflow-hidden rounded-lg" style={{ backgroundColor: `hsl(${hsv.hue} 100% 50%)`, backgroundImage: 'linear-gradient(to right, #fff, transparent), linear-gradient(to top, #000, transparent)' }} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); updateSurface(event) }} onPointerMove={(event) => { if (event.buttons > 0) updateSurface(event) }}>
         <span className="pointer-events-none absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow" style={{ left: `${hsv.saturation * 100}%`, top: `${(1 - hsv.value) * 100}%` }} />
       </div>
-      <label className="mt-3 block text-[10px] uppercase tracking-wider text-[var(--text-secondary)]">Matiz<input aria-label={`Matiz da cor ${label}`} type="range" min="0" max="360" value={Math.round(hsv.hue)} onChange={(event) => commitRgb(hsvToRgb(Number(event.target.value), hsv.saturation, hsv.value))} className="mt-1 w-full accent-[var(--primary)]" /></label>
-      <div className="mt-3 grid grid-cols-3 gap-2">{(['R', 'G', 'B'] as const).map((channel, index) => <label key={channel} className="text-[10px] uppercase text-[var(--text-secondary)]">{channel}<input aria-label={`${channel} da cor ${label}`} type="number" min="0" max="255" value={rgbDraft[index]} onChange={(event) => updateChannel(index, event.target.value)} className="field mt-1 px-2 py-1.5 text-xs" /></label>)}</div>
-      <label className="mt-3 block text-[10px] uppercase tracking-wider text-[var(--text-secondary)]">HEX<input aria-label={`HEX da cor ${label}`} value={hexDraft} onChange={(event) => { setHexDraft(event.target.value); const normalized = normalizeHex(event.target.value); if (normalized) onChange(normalized) }} onBlur={() => setHexDraft(value)} className="field mt-1 font-mono text-xs uppercase" /></label>
+      <label className="mt-3 block text-[10px] uppercase tracking-wider text-[var(--text-secondary)]">Matiz<input aria-label={`Matiz da cor ${label}`} type="range" min="0" max="360" value={Number.isFinite(hsv.hue) ? Math.round(hsv.hue) : 0} onChange={(event) => commitRgb(hsvToRgb(Number(event.target.value), hsv.saturation, hsv.value))} className="mt-1 w-full accent-[var(--primary)]" /></label>
+      <div className="mt-3 grid grid-cols-3 gap-2">{(['R', 'G', 'B'] as const).map((channel, index) => <label key={channel} className="text-[10px] uppercase text-[var(--text-secondary)]">{channel}<input aria-label={`${channel} da cor ${label}`} type="number" min="0" max="255" value={Number.isFinite(rgbDraft[index]) ? Math.round(rgbDraft[index]) : 0} onChange={(event) => updateChannel(index, event.target.value)} className="field mt-1 px-2 py-1.5 text-xs" /></label>)}</div>
+      <label className="mt-3 block text-[10px] uppercase tracking-wider text-[var(--text-secondary)]">HEX<input aria-label={`HEX da cor ${label}`} value={hexDraft} maxLength={7} inputMode="text" onChange={(event) => { setHexDraft(event.target.value); const normalized = normalizeHex(event.target.value); if (normalized) onChange(normalized) }} onBlur={() => setHexDraft(value)} className="field mt-1 font-mono text-xs uppercase" /></label>
       <div className="mt-3 flex items-center gap-2 text-xs text-[var(--text-secondary)]"><span className="size-7 rounded-md border border-[var(--border-default)]" style={{ backgroundColor: value }} />{value.toUpperCase()} · RGB {rgb.join(', ')}</div>
     </div>}
   </div>
