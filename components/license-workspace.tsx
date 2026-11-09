@@ -34,7 +34,7 @@ type RotaAnalysis = { tabs: string[]; detectedTabs: Array<{ tab: string; code: s
 
 const inputClass = 'field rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-blue-400/60'
 const statusNames: Record<string, string> = { active: 'Ativa', suspended: 'Suspensa', revoked: 'Revogada' }
-const defaultLicenseSiteUrl = 'https://gestao-de-software-house.vercel.app'
+const defaultLicenseSiteUrl = 'https://codexash.vercel.app'
 
 function licenseStatusLabel(license: License) {
   if (license.status === 'active' && license.expires_at && new Date(license.expires_at).getTime() < Date.now()) return 'Expirada'

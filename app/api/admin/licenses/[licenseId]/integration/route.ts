@@ -38,7 +38,7 @@ export async function POST(_request: Request, context: { params: Promise<{ licen
         schemaVersion: '1.0',
         projectType: 'nextjs-supabase',
         sdkVersion: '0.1.0',
-        apiUrl: new URL('/api/licenses/validate', _request.url).toString(),
+        apiUrl: process.env.NEXT_PUBLIC_APP_URL ?? 'https://codexash.vercel.app/api/licenses/validate',
         installationId,
         environment: { CODEXA_LICENSE_API_URL: 'https://SEU_PAINEL/api/licenses/validate', CODEXA_LICENSE_KEY: '<configure-no-servidor>' },
         requiredBackendChange: 'Chamar requireLicensedModule antes de cada operação protegida.',

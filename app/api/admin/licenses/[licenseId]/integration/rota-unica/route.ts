@@ -36,9 +36,7 @@ export async function POST(request: Request, context: { params: Promise<{ licens
     const analysis = analyzeAdminClient(originalCode, integrationModules)
     if (form.get('analyze') === 'true') return NextResponse.json({ analysis })
     const generated = generateRotaUnicaIntegration(originalCode, integrationModules, mapping)
-    // Never derive the client license URL from request.url: in local development
-    // that produces localhost and makes generated clients call the wrong app.
-    const apiUrl = process.env.CODEXA_LICENSE_API_URL ?? 'https://gestao-de-software-house.vercel.app/api/licenses/validate'
+    const apiUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://codexash.vercel.app/api/licenses/validate'
     const zip = new JSZip()
     zip.file('codexa-integration/lib/codexa-license.ts', licenseSource(apiUrl))
     zip.file('codexa-integration/app/admin/page.tsx', generatePageWrapper(generated.analysis.mappings))
