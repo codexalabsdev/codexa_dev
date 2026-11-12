@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Building2, Check, Eye, Inbox, Loader2, MessageSquare, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
+import { Building2, Check, Eye, Inbox, Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
 import { ListingControls } from '@/components/listing-controls'
 
 type Module = 'leads' | 'clients' | 'messages'
@@ -118,7 +118,7 @@ export function CrmWorkspace({ initialModule = 'leads', permissions = [] }: { in
   return <section className="mt-6 rounded-xl border border-white/[0.07] bg-[#11161e]">
     <div className="flex flex-col gap-4 border-b border-white/[0.07] p-5 lg:flex-row lg:items-center lg:justify-between">
       <div><p className="text-xs font-medium uppercase tracking-[0.16em] text-blue-400">CRM operacional</p><h2 className="mt-1 text-lg font-semibold text-white">{title}</h2><p className="mt-1 text-xs text-slate-500">Registros sincronizados com o Supabase.</p></div>
-      <div className="flex flex-wrap gap-2">{([['leads', Inbox, 'Leads'], ['clients', Building2, 'Clientes'], ['messages', MessageSquare, 'Mensagens']] as const).map(([key, Icon, label]) => <button key={key} onClick={() => { setModule(key); setQuery(''); setStatusFilter(''); setPage(0); setRecord(null); setEditingRecord(false) }} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium ${module === key ? 'bg-blue-500 text-white' : 'bg-white/[0.04] text-slate-400 hover:text-white'}`}><Icon className="size-3.5" />{label}</button>)}<button disabled={!canCreate} onClick={() => setModal(true)} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"><Plus className="size-3.5" />Novo registro</button></div>
+      <div className="flex flex-wrap gap-2">{([['leads', Inbox, 'Leads'], ['clients', Building2, 'Clientes']] as const).map(([key, Icon, label]) => <button key={key} onClick={() => { setModule(key); setQuery(''); setStatusFilter(''); setPage(0); setRecord(null); setEditingRecord(false) }} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium ${module === key ? 'bg-blue-500 text-white' : 'bg-white/[0.04] text-slate-400 hover:text-white'}`}><Icon className="size-3.5" />{label}</button>)}<button disabled={!canCreate} onClick={() => setModal(true)} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"><Plus className="size-3.5" />Novo registro</button></div>
     </div>
     <div className="flex items-center gap-3 border-b border-white/[0.07] px-5 py-3"><div className="flex flex-1 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2"><Search className="size-4 text-slate-600" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Pesquisar registros..." className="w-full bg-transparent text-xs text-slate-200 outline-none placeholder:text-slate-600" /></div><button onClick={() => void loadData()} className="rounded-lg border border-white/[0.08] px-3 py-2 text-xs text-slate-400 hover:text-white">Atualizar</button></div>
     {error && <div className="mx-5 mt-4 flex items-center justify-between rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-amber-300"><span>{error}</span><button onClick={() => setError('')} aria-label="Fechar aviso"><X className="size-3.5" /></button></div>}

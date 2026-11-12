@@ -532,7 +532,7 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
         <h2 className="text-sm font-semibold text-slate-200">Sugestão de operação</h2>
         <div className="mt-4 space-y-3">
           <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Cobran��a prevista</p>
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Cobrança prevista</p>
             <p className="mt-2 text-lg font-semibold text-white">{money(recurringSchedules.filter((item) => item.kind === 'receita').reduce((sum, item) => sum + Number(item.amount || 0), 0))}</p>
           </div>
           <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">

@@ -38,6 +38,8 @@ export function WorkspacePageRouter({ module, permissions, profileName }: { modu
   if (module === 'contas-a-receber') return <FinanceWorkspace initialTab="receivable" permissions={permissions} />
   if (module === 'contas-a-pagar') return <FinanceWorkspace initialTab="payable" permissions={permissions} />
   if (module === 'fluxo-de-caixa') return <FinanceWorkspace initialTab="cashflow" permissions={permissions} />
+  if (module === 'recorrencias') return <FinanceWorkspace initialTab="recurring" permissions={permissions} />
+  if (module === 'orcamento') return <FinanceWorkspace initialTab="budget" permissions={permissions} />
   if (module === 'transacoes' || module === 'categorias-financeiras') return <FinanceWorkspace initialTab="overview" permissions={permissions} />
   if (module === 'meu-perfil') return <GamifiedProfileWorkspace initialName={profileName} />
   if (module === 'emblemas') return <BadgeManagementWorkspace />

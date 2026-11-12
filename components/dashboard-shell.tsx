@@ -23,7 +23,7 @@ import { hasWorkspaceAccess } from '@/lib/workspace-access'
 import { workspaceLabel } from '@/lib/workspace-modules'
 import { applyWorkspaceAppearance, defaultAppearance, resolveIconColor, type WorkspaceAppearance } from '@/lib/workspace-theme'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faChartLine, faUserPlus, faUsers, faAddressBook, faFileSignature, faFileContract, faDiagramProject, faListCheck, faCodePullRequest, faHeadset, faServer, faPuzzlePiece, faLayerGroup, faKey, faArrowTrendUp, faArrowTrendDown, faChartPie, faUserShield, faUserGear, faShieldHalved, faClockRotateLeft, faUserCircle, faPalette, faGear, faMedal, faTrophy, faFolderOpen, faSliders } from '@fortawesome/free-solid-svg-icons'
+import { faChartLine, faUserPlus, faUsers, faFileSignature, faFileContract, faDiagramProject, faCodePullRequest, faHeadset, faServer, faPuzzlePiece, faLayerGroup, faKey, faArrowTrendUp, faDollarSign, faArrowTrendDown, faChartPie, faUserShield, faUserGear, faShieldHalved, faClockRotateLeft, faUserCircle, faPalette, faGear, faMedal, faTrophy, faFolderOpen, faSliders } from '@fortawesome/free-solid-svg-icons'
 import {
   Bell,
   BriefcaseBusiness,
@@ -58,8 +58,8 @@ const navigationGroups = [
   { label: 'Workspace', items: [{ label: 'Dashboard', icon: faChartLine }, { label: 'Visão comercial', icon: faChartLine }, { label: 'Documentos', icon: faFolderOpen }] },
   { label: 'Relacionamento', items: [
     { label: 'Leads', icon: faUserPlus },
-    { label: 'Clientes', icon: faUsers },
-    { label: 'Contatos', icon: faAddressBook },
+  { label: 'Clientes', icon: faUsers },
+
   ] },
   { label: 'Comercial', items: [
     { label: 'Propostas', icon: faFileSignature },
@@ -67,7 +67,6 @@ const navigationGroups = [
   ] },
   { label: 'Operações', items: [
     { label: 'Projetos', icon: faDiagramProject },
-    { label: 'Tarefas', icon: faListCheck },
     { label: 'Solicitações de alteração', icon: faCodePullRequest },
     { label: 'Suporte', icon: faHeadset },
   ] },
@@ -81,8 +80,8 @@ const navigationGroups = [
     { label: 'Contas a receber', icon: faArrowTrendUp },
     { label: 'Contas a pagar', icon: faArrowTrendDown },
     { label: 'Fluxo de caixa', icon: faChartLine },
-    { label: 'Transações', icon: faArrowTrendUp },
-    { label: 'Categorias financeiras', icon: faChartPie },
+    { label: 'Recorrências', icon: faDollarSign },
+    { label: 'Orçamento', icon: faChartPie },
   ] },
   { label: 'Administração', items: [
     { label: 'Relatórios', icon: faChartPie },
@@ -102,10 +101,10 @@ const navigationGroups = [
 ]
 
 const sectionSlugs: Record<string, string> = {
-  Dashboard: 'dashboard', 'Visão comercial': 'comercial', Documentos: 'documentos', Leads: 'leads', Clientes: 'clientes', Contatos: 'contatos', Propostas: 'propostas', Contratos: 'contratos',
-  Projetos: 'projetos', Tarefas: 'tarefas', 'Solicitações de alteração': 'solicitacoes', Suporte: 'suporte', 'Sistemas dos clientes': 'sistemas',
+  Dashboard: 'dashboard', 'Visão comercial': 'comercial', Documentos: 'documentos', Leads: 'leads', Clientes: 'clientes', Propostas: 'propostas', Contratos: 'contratos',
+  Projetos: 'projetos', 'Solicitações de alteração': 'solicitacoes', Suporte: 'suporte', 'Sistemas dos clientes': 'sistemas',
   Módulos: 'modulos', Planos: 'planos', Licenças: 'licencas', 'Contas a receber': 'contas-a-receber', 'Contas a pagar': 'contas-a-pagar',
-  'Fluxo de caixa': 'fluxo-de-caixa', Transações: 'transacoes', 'Categorias financeiras': 'categorias-financeiras', Relatórios: 'relatorios', Equipe: 'equipe',
+  'Fluxo de caixa': 'fluxo-de-caixa', Recorrências: 'recorrencias', Orçamento: 'orcamento', Relatórios: 'relatorios', Equipe: 'equipe',
   Usuários: 'usuarios', 'Papéis e permissões': 'papeis-e-permissoes', Emblemas: 'emblemas', 'Configuração de XP': 'configuracao-xp', 'Meu perfil': 'meu-perfil', 'Meu histórico': 'meu-historico', Configurações: 'configuracoes', Aparência: 'aparencia', Auditoria: 'auditoria',
 }
 
@@ -437,11 +436,11 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
           <section className="mt-6 rounded-xl border border-white/[0.07] bg-[#11161e]"><div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4"><div className="flex items-center gap-3"><div className="grid size-9 place-items-center rounded-lg bg-amber-400/10 text-amber-300"><FontAwesomeIcon icon={faTrophy} className="size-4" /></div><div><h2 className="text-sm font-semibold text-slate-200">Ranking da empresa</h2><p className="mt-0.5 text-xs text-slate-500">Evolução da equipe por XP e nível</p></div></div><span className="text-xs text-slate-500">Atualizado agora</span></div><div className="divide-y divide-white/[0.06]">{dashboardData.ranking.length ? dashboardData.ranking.map((member, index) => <div key={member.id} className="flex items-center gap-3 px-5 py-3"><span className={`grid size-7 place-items-center rounded-lg text-xs font-semibold ${index === 0 ? 'bg-amber-300/15 text-amber-200' : 'bg-white/[.04] text-slate-400'}`}>{index + 1}</span><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-slate-200">{member.full_name}</p><p className="text-[10px] text-slate-500">{member.role_name} · nível {member.level} · marco: {member.milestone_name ?? 'Iniciante'}</p></div><span className="text-xs font-semibold text-cyan-300">{member.xp} XP</span></div>) : <div className="flex min-h-[150px] items-center justify-center px-6 text-center"><p className="text-xs text-slate-600">Adicione XP à equipe para formar o ranking.</p></div>}</div></section>
 
           </div>}
-          {['Leads', 'Mensagens', 'Clientes'].includes(activeSection) && <div id="crm-workspace" className="scroll-mt-24"><CrmWorkspace initialModule={activeSection === 'Clientes' ? 'clients' : activeSection === 'Mensagens' ? 'messages' : 'leads'} permissions={permissions} /></div>}
+          {['Leads', 'Clientes'].includes(activeSection) && <div id="crm-workspace" className="scroll-mt-24"><CrmWorkspace initialModule={activeSection === 'Clientes' ? 'clients' : 'leads'} permissions={permissions} /></div>}
           {['Propostas', 'Contratos'].includes(activeSection) && <div id="commercial-workspace" className="scroll-mt-24"><CommercialWorkspace initialTab={activeSection === 'Contratos' ? 'contracts' : 'proposals'} permissions={permissions} /></div>}
           {['Projetos', 'Solicitações de alteração', 'Suporte'].includes(activeSection) && <div id="operations-workspace" className="scroll-mt-24"><OperationsWorkspace permissions={permissions} initialModule={activeSection === 'Suporte' ? 'support_tickets' : activeSection === 'Solicitações de alteração' ? 'change_requests' : 'projects'} /></div>}
           {['Sistemas dos clientes', 'Módulos'].includes(activeSection) && <div id="catalog-workspace" className="scroll-mt-24"><CatalogWorkspace initialTab={activeSection === 'Módulos' ? 'modules' : 'systems'} /></div>}
-          {['Contas a receber', 'Contas a pagar', 'Fluxo de caixa', 'Transações', 'Categorias financeiras'].includes(activeSection) && <div id="finance-workspace" className="scroll-mt-24"><FinanceWorkspace initialTab={activeSection === 'Contas a receber' ? 'receivable' : activeSection === 'Contas a pagar' ? 'payable' : activeSection === 'Fluxo de caixa' ? 'cashflow' : 'overview'} permissions={permissions} /></div>}
+          {['Contas a receber', 'Contas a pagar', 'Fluxo de caixa', 'Recorrências', 'Orçamento'].includes(activeSection) && <div id="finance-workspace" className="scroll-mt-24"><FinanceWorkspace initialTab={activeSection === 'Contas a receber' ? 'receivable' : activeSection === 'Contas a pagar' ? 'payable' : activeSection === 'Fluxo de caixa' ? 'cashflow' : activeSection === 'Recorrências' ? 'recurring' : activeSection === 'Orçamento' ? 'budget' : 'overview'} permissions={permissions} /></div>}
           {activeSection === 'Relatórios' && <div id="reports-workspace" className="scroll-mt-24"><ReportsWorkspace permissions={permissions} /></div>}
           {['Equipe', 'Configurações'].includes(activeSection) && <div id="admin-workspace" className="scroll-mt-24"><AdminWorkspace section={activeSection} permissions={permissions} /></div>}
           {activeSection === 'Configuração de XP' && <XpSettingsWorkspace />}
@@ -449,7 +448,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
           {activeSection === 'Meu histórico' && <ActivityHistoryWorkspace permissions={permissions} mode="personal" />}
           {activeSection === 'Meu perfil' && <GamifiedProfileWorkspace initialName={profileName} />}
   {activeSection === 'Aparência' && <AccountWorkspace section={activeSection} initialName={profileName} />}
-          {!['Dashboard', 'Leads', 'Mensagens', 'Clientes', 'Propostas', 'Contratos', 'Projetos', 'Solicitações de alteração', 'Suporte', 'Sistemas', 'Módulos', 'Planos', 'Licenças', 'Financeiro', 'Equipe', 'Relatórios', 'Configurações', 'Auditoria', 'Meu histórico', 'Emblemas', 'Configuração de XP'].includes(activeSection) && <section className="rounded-xl border border-white/[0.07] bg-[#11161e] p-8"><p className="text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Módulo</p><h1 className="mt-2 text-2xl font-semibold text-white">{activeSection}</h1><p className="mt-2 text-sm text-slate-500">Esta página está preparada para receber os registros deste módulo.</p></section>}
+          {!['Dashboard', 'Leads', 'Clientes', 'Propostas', 'Contratos', 'Projetos', 'Solicitações de alteração', 'Suporte', 'Sistemas', 'Módulos', 'Planos', 'Licenças', 'Financeiro', 'Equipe', 'Relatórios', 'Configurações', 'Auditoria', 'Meu histórico', 'Emblemas', 'Configuração de XP'].includes(activeSection) && <section className="rounded-xl border border-white/[0.07] bg-[#11161e] p-8"><p className="text-xs font-medium uppercase tracking-[0.16em] text-blue-400">Módulo</p><h1 className="mt-2 text-2xl font-semibold text-white">{activeSection}</h1><p className="mt-2 text-sm text-slate-500">Esta página está preparada para receber os registros deste módulo.</p></section>}
           </>}
         </main>
       </div>

@@ -7,7 +7,9 @@ import { ProjectListWorkspace } from '@/components/project-list-workspace'
 import { hasWorkspaceAccess } from '@/lib/workspace-access'
 
 type Module = 'projects' | 'change_requests' | 'support_tickets'
-type ChangeRequest = { id: string; title: string; requester: string; description: string | null; status: string; priority: string; category: string; effort_hours: number }
+type ChangeRequest = { id: string; title: string; requester: string; description: string | null; status: string; priority: string; category: string; effort_hours: number | null; due_at: string | null; decision_notes: string | null; updated_at: string | null }
+const changeRequestStatuses = ['Recebida', 'Em análise', 'Aprovada', 'Em desenvolvimento', 'Em validação', 'Concluída', 'Recusada', 'Cancelada']
+const changeRequestPriorities = ['Baixa', 'Média', 'Alta', 'Crítica']
 type Ticket = {
   id: string
   ticket_number: string
@@ -207,7 +209,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
     const supabase = createClient()
     if (module === 'change_requests') {
       const { data, error: queryError } = await supabase.from('change_requests')
-        .select('id,title,requester,description,status,priority,category,effort_hours')
+        .select('id,title,requester,description,status,priority,category,effort_hours,due_at,decision_notes,updated_at')
         .order('created_at', { ascending: false })
       if (queryError) setError(`Não foi possível carregar as solicitações: ${queryError.message}`)
       else setRequests((data ?? []) as ChangeRequest[])
@@ -443,7 +445,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
     setError('')
     const data = Object.fromEntries(new FormData(event.currentTarget).entries())
     const payload = module === 'change_requests'
-      ? { requester: data.requester, title: data.title, description: data.description, category: data.category || 'Nova funcionalidade', priority: data.priority || 'Média' }
+      ? { requester: data.requester, title: data.title, description: data.description, category: data.category || 'Nova funcionalidade', priority: data.priority || 'Média', status: 'Recebida', effort_hours: Number(data.effort_hours) || 0, due_at: data.due_at ? new Date(String(data.due_at)).toISOString() : null, decision_notes: null }
       : {
           ticket_number: data.ticket_number,
           requester: data.requester,
@@ -496,7 +498,7 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
           resolved_at: isResolved ? (wasResolved ? previousTicket.resolved_at : new Date().toISOString()) : null,
           ...(canAssign ? { technical_responsible_id: data.technical_responsible_id || null } : {}),
         }
-      : { title: data.title, requester: data.requester, description: data.description || null, category: data.category, priority: data.priority, status: data.status }
+      : { title: data.title, requester: data.requester, description: data.description || null, category: data.category, priority: data.priority, status: data.status, effort_hours: data.effort_hours === '' ? null : Number(data.effort_hours), due_at: data.due_at ? new Date(String(data.due_at)).toISOString() : null, decision_notes: data.decision_notes || null, updated_at: new Date().toISOString() }
     const table = module === 'change_requests' ? 'change_requests' : 'support_tickets'
     const { error: updateError } = await createClient().from(table).update(payload).eq('id', record.id)
     if (updateError) setError(`Não foi possível salvar as alterações: ${updateError.message}`)
@@ -709,7 +711,9 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
           <label className="text-xs text-slate-400">Solicitante<input required name="requester" className={`${inputClass} mt-1.5`} /></label>
           <label className="text-xs text-slate-400">Título<input required name="title" className={`${inputClass} mt-1.5`} /></label>
           <label className="text-xs text-slate-400">Categoria<select name="category" className={`${inputClass} mt-1.5`}><option>Nova funcionalidade</option><option>Melhoria</option><option>Correção</option></select></label>
-          <label className="text-xs text-slate-400">Prioridade<select name="priority" className={`${inputClass} mt-1.5`}><option>Média</option><option>Baixa</option><option>Alta</option><option>Crítica</option></select></label>
+          <label className="text-xs text-slate-400">Prioridade<select name="priority" className={`${inputClass} mt-1.5`}>{changeRequestPriorities.map((priority) => <option key={priority}>{priority}</option>)}</select></label>
+          <label className="text-xs text-slate-400">Esforço estimado (horas)<input name="effort_hours" type="number" min="0" step="0.5" defaultValue="0" className={`${inputClass} mt-1.5`} /></label>
+          <label className="text-xs text-slate-400 sm:col-span-2">Prazo desejado<input name="due_at" type="datetime-local" className={`${inputClass} mt-1.5`} /></label>
           <label className="text-xs text-slate-400 sm:col-span-2">Descrição<textarea required name="description" rows={4} className={`${inputClass} mt-1.5 resize-y`} /></label>
         </> : <>
           <label className="text-xs text-slate-400">Número do chamado<input required name="ticket_number" className={`${inputClass} mt-1.5`} /></label>
@@ -733,7 +737,9 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
       {editingRecord ? <form onSubmit={(event) => void saveRecord(event)} className="grid gap-3 sm:grid-cols-2">
         {'ticket_number' in record ? <label className="text-xs text-slate-400">Assunto<input name="subject" required defaultValue={record.subject} className={`${inputClass} mt-1`} /></label> : <label className="text-xs text-slate-400">Título<input name="title" required defaultValue={record.title} className={`${inputClass} mt-1`} /></label>}
         <label className="text-xs text-slate-400">Solicitante<input name="requester" required defaultValue={record.requester} className={`${inputClass} mt-1`} /></label>
-        <label className="text-xs text-slate-400">Categoria<input name="category" required defaultValue={record.category} className={`${inputClass} mt-1`} /></label>
+        {'ticket_number' in record
+          ? <label className="text-xs text-slate-400">Categoria<input name="category" required defaultValue={record.category} className={`${inputClass} mt-1`} /></label>
+          : <label className="text-xs text-slate-400">Categoria<select name="category" required defaultValue={record.category} className={`${inputClass} mt-1`}>{['Nova funcionalidade', 'Melhoria', 'Correção', record.category].filter((value, index, values) => values.indexOf(value) === index).map((category) => <option key={category}>{category}</option>)}</select></label>}
         {'ticket_number' in record && <label className="text-xs text-slate-400">Setor responsável<select name="sector" required value={editingSector} onChange={(event) => setEditingSector(event.target.value)} className={`${inputClass} mt-1`}>{supportSectors.map((sector) => <option key={sector}>{sector}</option>)}</select></label>}
         {'ticket_number' in record && canAssign && <label className="text-xs text-slate-400">Responsável<select name="technical_responsible_id" defaultValue={record.technical_responsible_id ?? ''} className={`${inputClass} mt-1`}><option value="">Atribuição automática do setor</option>{membersForSector(editingSector).filter((member) => member.user_id).map((member) => <option key={member.user_id} value={member.user_id!}>{member.full_name}</option>)}</select></label>}
         <label className="text-xs text-slate-400">Prioridade<select name="priority" defaultValue={normalizeSupportPriority(record.priority)} className={`${inputClass} mt-1`}>
@@ -741,15 +747,20 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
         </select></label>
         {'ticket_number' in record
           ? <label className="text-xs text-slate-400">Status<select name="status" required defaultValue={normalizeSupportStatus(record.status)} className={`${inputClass} mt-1`}>{!supportStatuses.includes(normalizeSupportStatus(record.status)) && <option>{normalizeSupportStatus(record.status)}</option>}{supportStatuses.map((status) => <option key={status}>{status}</option>)}</select></label>
-          : <label className="text-xs text-slate-400">Status<input name="status" required defaultValue={record.status} className={`${inputClass} mt-1`} /></label>}
-        {'ticket_number' in record && <>
+          : <label className="text-xs text-slate-400">Status<select name="status" required defaultValue={record.status} className={`${inputClass} mt-1`}>{!changeRequestStatuses.includes(record.status) && <option>{record.status}</option>}{changeRequestStatuses.map((status) => <option key={status}>{status}</option>)}</select></label>}
+        {'ticket_number' in record ? <>
           <label className="text-xs text-slate-400">Prazo<input name="due_at" type="datetime-local" defaultValue={toLocalDateTime(record.due_at)} className={`${inputClass} mt-1`} /></label>
           <label className="text-xs text-slate-400">Horário agendado<input name="scheduled_at" type="datetime-local" defaultValue={toLocalDateTime(record.scheduled_at)} className={`${inputClass} mt-1`} /></label>
+        </> : <>
+          <label className="text-xs text-slate-400">Esforço estimado (horas)<input name="effort_hours" type="number" min="0" step="0.5" defaultValue={record.effort_hours ?? 0} className={`${inputClass} mt-1`} /></label>
+          <label className="text-xs text-slate-400">Prazo desejado<input name="due_at" type="datetime-local" defaultValue={toLocalDateTime(record.due_at)} className={`${inputClass} mt-1`} /></label>
         </>}
         <label className="text-xs text-slate-400 sm:col-span-2">Descrição<textarea name="description" defaultValue={record.description || ''} rows={5} className={`${inputClass} mt-1 resize-y`} /></label>
-        {'ticket_number' in record && <label className="text-xs text-slate-400 sm:col-span-2">Resolução<textarea name="resolution" defaultValue={record.resolution || ''} rows={4} className={`${inputClass} mt-1 resize-y`} /></label>}
+        {'ticket_number' in record
+          ? <label className="text-xs text-slate-400 sm:col-span-2">Resolução<textarea name="resolution" defaultValue={record.resolution || ''} rows={4} className={`${inputClass} mt-1 resize-y`} /></label>
+          : <label className="text-xs text-slate-400 sm:col-span-2">Notas da decisão / andamento<textarea name="decision_notes" defaultValue={record.decision_notes || ''} rows={3} className={`${inputClass} mt-1 resize-y`} /></label>}
         <div className="flex justify-end gap-2 sm:col-span-2"><button type="button" onClick={() => setEditingRecord(false)} className="rounded-lg px-3 py-2 text-xs text-slate-300">Cancelar</button><button disabled={saving} className="rounded-lg bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950">{saving ? 'Salvando...' : 'Salvar alterações'}</button></div>
-      </form> : <><div className="grid gap-4 text-sm sm:grid-cols-2"><p className="text-slate-400">Solicitante<span className="mt-1 block text-slate-200">{record.requester}</span></p><p className="text-slate-400">Status / prioridade<span className="mt-1 block text-slate-200">{normalizeSupportStatus('ticket_number' in record ? record.status : record.status)} · {normalizeSupportPriority('ticket_number' in record ? record.priority : record.priority)}</span></p><p className="text-slate-400">Categoria<span className="mt-1 block text-slate-200">{record.category}</span></p>{'ticket_number' in record && <>
+      </form> : <><div className="grid gap-4 text-sm sm:grid-cols-2"><p className="text-slate-400">Solicitante<span className="mt-1 block text-slate-200">{record.requester}</span></p><p className="text-slate-400">Status / prioridade<span className="mt-1 block text-slate-200">{normalizeSupportStatus('ticket_number' in record ? record.status : record.status)} · {normalizeSupportPriority('ticket_number' in record ? record.priority : record.priority)}</span></p><p className="text-slate-400">Categoria<span className="mt-1 block text-slate-200">{record.category}</span></p>{'ticket_number' in record ? <>
         <p className="text-slate-400">Setor responsável<span className="mt-1 block text-slate-200">{record.sector}</span></p>
         <p className="text-slate-400">Responsável<span className="mt-1 block text-slate-200">{members.find((member) => member.user_id === record.technical_responsible_id)?.full_name ?? record.technical_responsible_id ?? 'Fila de triagem'}</span></p>
         <p className="text-slate-400">Prazo<span className="mt-1 block text-slate-200">{record.due_at ? new Date(record.due_at).toLocaleString('pt-BR') : 'Não definido'}</span></p>
@@ -757,8 +768,12 @@ export function OperationsWorkspace({ initialModule = 'projects', permissions }:
         <p className="text-slate-400">Resolvido em<span className="mt-1 block text-slate-200">{record.resolved_at ? new Date(record.resolved_at).toLocaleString('pt-BR') : '—'}</span></p>
         <p className="whitespace-pre-wrap text-slate-300 sm:col-span-2">Descrição: {record.description || 'Sem descrição cadastrada.'}</p>
         <p className="whitespace-pre-wrap text-slate-300 sm:col-span-2">Resolução: {record.resolution || 'Ainda não informada.'}</p>
+      </> : <>
+        <p className="text-slate-400">Esforço estimado<span className="mt-1 block text-slate-200">{record.effort_hours ?? 0} h</span></p>
+        <p className="text-slate-400">Prazo desejado<span className="mt-1 block text-slate-200">{record.due_at ? new Date(record.due_at).toLocaleString('pt-BR') : 'Não definido'}</span></p>
+        <p className="whitespace-pre-wrap text-slate-300 sm:col-span-2">Descrição: {record.description || 'Sem descrição cadastrada.'}</p>
+        <p className="whitespace-pre-wrap text-slate-300 sm:col-span-2">Notas da decisão / andamento: {record.decision_notes || 'Nenhuma nota registrada.'}</p>
       </>}
-      {'ticket_number' in record ? null : <p className="whitespace-pre-wrap text-slate-300 sm:col-span-2">{record.description || 'Sem descrição cadastrada.'}</p>}
       </div>
       {'ticket_number' in record && <div className="mt-5 rounded-xl border border-white/[0.08] bg-[#0d141b] p-4">
         <div className="mb-3 flex items-center justify-between gap-3">

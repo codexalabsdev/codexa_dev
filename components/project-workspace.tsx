@@ -117,6 +117,8 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
   const [taskModal, setTaskModal] = useState<{ open: boolean; task: ProjectTask | null; status: string }>({ open: false, task: null, status: 'Backlog' })
   const [taskSaving, setTaskSaving] = useState(false)
   const [movingTaskId, setMovingTaskId] = useState('')
+  const [draggingTaskId, setDraggingTaskId] = useState('')
+  const [dragOverStatus, setDragOverStatus] = useState('')
   const [commentItems, setCommentItems] = useState<TaskComment[]>([])
   const [commentBody, setCommentBody] = useState('')
   const [commentError, setCommentError] = useState('')
@@ -554,18 +556,21 @@ export function ProjectWorkspace({ projectId, permissions }: { projectId: string
             <div className="grid min-w-max grid-flow-col auto-cols-[minmax(260px,1fr)] gap-3 xl:auto-cols-[minmax(230px,1fr)]">
               {[...columns, ...extraStatuses.map((status) => ({ status, label: status })), ...(taskStatusCounts.has('Cancelado') ? [{ status: 'Cancelado', label: 'Canceladas' }] : [])].map((column) => {
                 const cards = taskCards(column.status)
-                return <section key={column.status} onDragOver={(event) => { if (canUpdateTasks) event.preventDefault() }} onDrop={(event) => {
+                return <section key={column.status} onDragOver={(event) => { if (canUpdateTasks && draggingTaskId) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDragOverStatus(column.status) } }} onDrop={(event) => {
                   event.preventDefault()
-                  const task = tasks.find((item) => item.id === event.dataTransfer.getData('text/plain'))
+                  const taskId = event.dataTransfer.getData('text/plain') || draggingTaskId
+                  const task = tasks.find((item) => item.id === taskId)
+                  setDraggingTaskId('')
+                  setDragOverStatus('')
                   if (canUpdateTasks && task) void moveTask(task, column.status)
-                }} className="flex min-h-[340px] flex-col rounded-xl border border-white/[0.07] bg-[#11161e]">
+                }} className={`flex min-h-[340px] flex-col rounded-xl border bg-[#11161e] transition-colors ${dragOverStatus === column.status ? 'border-blue-400/50 bg-blue-400/[0.04]' : 'border-white/[0.07]'}`}>
                   <div className="flex items-center justify-between border-b border-white/[0.07] px-3.5 py-3"><h3 className="text-sm font-semibold text-slate-200">{column.label}</h3><span className="min-w-6 rounded-md bg-white/[0.06] px-1.5 py-0.5 text-center text-xs tabular-nums text-slate-300">{cards.length}</span></div>
                   <div className="flex flex-1 flex-col gap-2 p-2.5">
                     {cards.map((task) => {
                       const member = task.responsible_id ? memberById.get(task.responsible_id) : undefined
                       const overdue = Boolean(task.due_date && task.due_date < new Date().toISOString().slice(0, 10) && !isComplete(task.status) && !isCanceled(task.status))
-                      return <article key={task.id} draggable={canUpdateTasks && column.status !== 'Cancelado'} onDragStart={(event) => { if (!canUpdateTasks) return; event.dataTransfer.setData('text/plain', task.id); event.dataTransfer.effectAllowed = 'move' }} onDragOver={(event) => { if (canUpdateTasks) { event.preventDefault(); event.dataTransfer.dropEffect = 'move' } }} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); const dragged = tasks.find((item) => item.id === event.dataTransfer.getData('text/plain')); if (dragged && dragged.id !== task.id) void reorderTask(dragged, column.status, task.id) }} className={`rounded-lg border border-white/[0.08] bg-[#171d28] p-3 cursor-grab transition-colors hover:border-blue-400/30 active:cursor-grabbing ${movingTaskId === task.id ? 'opacity-50' : ''}`}>
-                        <button onClick={() => openTask(task)} className="w-full text-left"><span className="flex items-start gap-2"><GripVertical className="mt-0.5 size-4 shrink-0 text-slate-600" /><span className="line-clamp-2 min-w-0 font-medium leading-5 text-slate-100">{task.title}</span></span></button>
+                      return <article key={task.id} onDragOver={(event) => { if (canUpdateTasks && draggingTaskId) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDragOverStatus(column.status) } }} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); const taskId = event.dataTransfer.getData('text/plain') || draggingTaskId; const dragged = tasks.find((item) => item.id === taskId); setDraggingTaskId(''); setDragOverStatus(''); if (dragged && dragged.id !== task.id) void reorderTask(dragged, column.status, task.id) }} className={`rounded-lg border border-white/[0.08] bg-[#171d28] p-3 transition-colors hover:border-blue-400/30 ${movingTaskId === task.id ? 'opacity-50' : ''}`}>
+                        <button draggable={canUpdateTasks && column.status !== 'Cancelado'} onDragStart={(event) => { if (!canUpdateTasks) return; setDraggingTaskId(task.id); event.dataTransfer.setData('text/plain', task.id); event.dataTransfer.effectAllowed = 'move' }} onDragEnd={() => { setDraggingTaskId(''); setDragOverStatus('') }} onClick={() => openTask(task)} className="w-full cursor-grab text-left active:cursor-grabbing"><span className="flex items-start gap-2"><GripVertical className="mt-0.5 size-4 shrink-0 text-slate-600" /><span className="line-clamp-2 min-w-0 font-medium leading-5 text-slate-100">{task.title}</span></span></button>
                         <div className="mt-3 flex flex-wrap items-center gap-1.5 pl-6">
                           <span className={`rounded border px-2 py-0.5 text-[11px] ${priorityTone(task.priority)}`}><Flag className="mr-1 inline size-3" />{task.priority}</span>
                           {task.due_date && <span className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] ${overdue ? 'border-rose-400/20 bg-rose-400/10 text-rose-200' : 'border-white/[0.08] text-slate-400'}`}><CalendarDays className="size-3" />{dateLabel(task.due_date)}</span>}

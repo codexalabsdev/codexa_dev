@@ -186,7 +186,7 @@ export function CommercialWorkspace({ initialTab = 'proposals', permissions = []
     const { error: updateError } = await createClient().from(tab).update(payload).eq('id', record.id)
     if (updateError) {
       console.error('Commercial record update failed:', updateError.message)
-      setError(`Não foi possível salvar as alteraç��es: ${updateError.message}`)
+      setError(`Não foi possível salvar as alterações: ${updateError.message}`)
     } else {
       setEditingRecord(false)
       setRecord(null)
