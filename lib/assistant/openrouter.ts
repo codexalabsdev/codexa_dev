@@ -10,6 +10,7 @@ const FEATURED_FREE_MODEL_IDS = [
   'google/gemma-4-31b-it:free',
   'google/gemma-4-26b-a4b-it:free',
   'nvidia/nemotron-3.5-super-vl:free',
+  'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
   'cohere/north-mini-code:free',
   'dots-studio/dots-3-note-preview:free',
 ] as const
@@ -36,6 +37,8 @@ export type OpenRouterChatModel = {
   supportsTools: boolean
   supportsStructuredOutput: boolean
   supportsStreaming: boolean | null
+  supportsImages: boolean
+  supportsAudio: boolean
 }
 
 export class OpenRouterError extends Error {
@@ -109,6 +112,8 @@ function mapModel(value: RawModel): OpenRouterChatModel | undefined {
     supportsTools: parameters.includes('tools'),
     supportsStructuredOutput: parameters.includes('response_format') || parameters.includes('structured_outputs'),
     supportsStreaming: typeof value.supports_streaming === 'boolean' ? value.supports_streaming : null,
+    supportsImages: inputModalities.includes('image'),
+    supportsAudio: inputModalities.includes('audio'),
   }
 }
 

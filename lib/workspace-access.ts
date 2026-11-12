@@ -16,6 +16,8 @@ export const workspaceAccess: Record<string, string[]> = {
   'contas-a-receber': ['accounts_receivable:view'],
   'contas-a-pagar': ['accounts_payable:view'],
   'fluxo-de-caixa': ['finance:view'],
+  recorrencias: ['finance:view'],
+  orcamento: ['finance:view'],
   transacoes: ['finance:view'],
   'categorias-financeiras': ['finance:view'],
   relatorios: ['reports_commercial:view', 'reports_financial:view'],
