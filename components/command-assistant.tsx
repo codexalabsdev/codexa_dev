@@ -403,18 +403,16 @@ export function CommandAssistant({ context, module, isOpen, onClose, onConversat
   }
 
   async function deleteConversation(conversation: Conversation) {
+    if (conversationId === conversation.id) {
+      setActionError('Encerre a conversa iniciando uma nova antes de excluí-la.')
+      return
+    }
     if (!window.confirm(`Excluir a conversa “${conversation.title}”?`)) return
     const response = await fetch(`/api/assistant/conversations/${conversation.id}`, { method: 'DELETE' })
     if (!response.ok) {
       const payload = await response.json().catch(() => ({})) as { error?: string }
       setActionError(payload.error ?? 'Não foi possível excluir a conversa.')
       return
-    }
-    if (conversationId === conversation.id) {
-      if (loading) stop()
-      setConversationId(null)
-      requestState.current.conversationId = null
-      setMessages([])
     }
     setActionError('')
     void mutateConversations()
@@ -853,7 +851,7 @@ export function CommandAssistant({ context, module, isOpen, onClose, onConversat
         {showHistory && <div className="max-h-36 overflow-y-auto border-b border-white/[0.07] bg-[#0c1117] p-2" aria-label="Histórico de conversas">
           {historyData?.conversations.length ? historyData.conversations.map((conversation) => <div key={conversation.id} className="flex items-center gap-1">
             <button type="button" onClick={() => { discardRecording(); stop(); setMessages([]); setPendingFiles([]); setRestoreConversationId(conversation.id); setActionError('') }} className={`flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-[11px] transition-colors hover:bg-white/[0.06] ${conversation.id === conversationId ? 'bg-cyan-400/[0.08] text-cyan-100' : 'text-slate-300'}`}><span className="truncate">{conversation.title}</span><span className="shrink-0 text-[9px] text-slate-600">{new Date(conversation.last_message_at).toLocaleDateString('pt-BR')}</span></button>
-            <Button type="button" variant="ghost" size="icon-xs" onClick={() => void deleteConversation(conversation)} aria-label={`Excluir conversa ${conversation.title}`} title="Excluir conversa"><Trash2 data-icon="inline-start" /></Button>
+            <Button type="button" variant="ghost" size="icon-xs" onClick={() => void deleteConversation(conversation)} disabled={conversation.id === conversationId} aria-label={conversation.id === conversationId ? `Conversa ativa ${conversation.title}; inicie uma nova para encerrar antes de excluir` : `Excluir conversa ${conversation.title}`} title={conversation.id === conversationId ? 'Inicie uma nova conversa para encerrar antes de excluir.' : 'Excluir conversa'}><Trash2 data-icon="inline-start" /></Button>
           </div>) : <p className="px-2 py-3 text-center text-[10px] text-slate-500">Nenhuma conversa salva.</p>}
         </div>}
 
