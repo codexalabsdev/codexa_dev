@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import useSWR from 'swr'
-import { ArrowRight, BriefcaseBusiness, LoaderCircle, Mail, Phone, Users, X } from 'lucide-react'
+import useSWRMutation from 'swr/mutation'
+import { ArrowRight, BriefcaseBusiness, LoaderCircle, Mail, MessageCircle, Phone, Users, X } from 'lucide-react'
 
 type EmployeeContact = {
   name: string
@@ -10,6 +10,18 @@ type EmployeeContact = {
   jobTitle: string | null
   email: string | null
   phone: string | null
+  whatsappEnabled: boolean
+}
+
+const sectorMessages: Record<string, (name: string) => string> = {
+  'Suporte Técnico': (name) => `Olá, ${name}! Sou cliente da Codexa e preciso de ajuda com suporte técnico.`,
+  Financeiro: (name) => `Olá, ${name}! Sou cliente da Codexa e gostaria de tirar uma dúvida sobre financeiro.`,
+  Comercial: (name) => `Olá, ${name}! Sou cliente da Codexa e gostaria de conversar sobre soluções comerciais.`,
+  Operações: (name) => `Olá, ${name}! Sou cliente da Codexa e preciso de ajuda com uma questão de operações.`,
+}
+
+function getWhatsAppMessage(employee: EmployeeContact) {
+  return sectorMessages[employee.sector]?.(employee.name) ?? `Olá, ${employee.name}! Sou cliente da Codexa e gostaria de falar com o setor ${employee.sector}.`
 }
 
 type ContactResponse = { employees: EmployeeContact[] }
@@ -18,10 +30,15 @@ type DialogProps = { open: boolean; onDismiss: () => void; labelledBy: string; c
 const sectorOrder = ['Suporte Técnico', 'Financeiro', 'Comercial', 'Operações']
 const inputClass = 'mt-2 w-full rounded-xl border border-white/10 bg-[#0b1118] px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/15'
 
-async function fetchContacts(url: string): Promise<ContactResponse> {
-  const response = await fetch(url, { cache: 'no-store' })
+async function submitClientCode(url: string, { arg }: { arg: string }): Promise<ContactResponse> {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: arg }),
+    cache: 'no-store',
+  })
   const result = await response.json() as ContactResponse & { error?: string }
-  if (!response.ok) throw new Error(result.error || 'Não foi possível carregar os contatos.')
+  if (!response.ok) throw new Error(result.error || 'Não foi possível validar o código.')
   return result
 }
 
@@ -51,7 +68,8 @@ function ContactDialog({ open, onDismiss, labelledBy, children }: DialogProps) {
 export function PublicClientContacts() {
   const [step, setStep] = useState<'closed' | 'code' | 'contacts'>('closed')
   const [clientCode, setClientCode] = useState('')
-  const { data, error, isLoading } = useSWR<ContactResponse>(step === 'contacts' ? '/api/public/contact' : null, fetchContacts)
+  const [codeError, setCodeError] = useState('')
+  const { data, error, isMutating: isLoading, trigger, reset } = useSWRMutation<ContactResponse, Error, string, string>('/api/public/contact', submitClientCode)
 
   const groups = useMemo(() => {
     const bySector = new Map<string, EmployeeContact[]>()
@@ -66,13 +84,22 @@ export function PublicClientContacts() {
   }, [data])
 
   function openCodeDialog() {
+    reset()
+    setCodeError('')
     setClientCode('')
     setStep('code')
   }
 
-  function continueToContacts(event: FormEvent<HTMLFormElement>) {
+  async function continueToContacts(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (clientCode.trim()) setStep('contacts')
+    if (!clientCode.trim()) return
+    setCodeError('')
+    try {
+      await trigger(clientCode.trim())
+      setStep('contacts')
+    } catch (validationError) {
+      setCodeError(validationError instanceof Error ? validationError.message : 'Não foi possível validar o código.')
+    }
   }
 
   return (
@@ -104,9 +131,10 @@ export function PublicClientContacts() {
           <p className="mt-3 text-sm leading-6 text-slate-400">Use o código recebido da Codexa para acessar os contatos da equipe.</p>
           <form onSubmit={continueToContacts} className="mt-6">
             <label htmlFor="client-code" className="text-xs font-medium text-slate-300">Código do cliente</label>
-            <input id="client-code" name="clientCode" type="text" autoComplete="off" required maxLength={80} value={clientCode} onChange={(event) => setClientCode(event.target.value)} placeholder="Digite seu código" className={inputClass} />
-            <button type="submit" className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-300 px-4 py-3 text-sm font-semibold text-[#071016] transition hover:bg-cyan-200">
-              Continuar <ArrowRight className="size-4" aria-hidden="true" />
+            <input id="client-code" name="clientCode" type="text" autoComplete="off" required maxLength={80} value={clientCode} onChange={(event) => { setClientCode(event.target.value); setCodeError('') }} placeholder="Digite seu código" className={inputClass} />
+            {codeError && <p role="alert" className="mt-3 text-sm text-rose-300">{codeError}</p>}
+            <button type="submit" disabled={isLoading} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-300 px-4 py-3 text-sm font-semibold text-[#071016] transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60">
+              {isLoading ? 'Validando...' : 'Continuar'} {isLoading ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <ArrowRight className="size-4" aria-hidden="true" />}
             </button>
           </form>
         </div>
@@ -139,20 +167,20 @@ export function PublicClientContacts() {
                   ) : (
                     <ul className="mt-3 space-y-3">
                       {employees.map((employee) => (
-                        <li key={`${employee.sector}-${employee.name}-${employee.email ?? ''}-${employee.phone ?? ''}`} className="rounded-xl border border-white/[0.06] bg-[#0a1017] p-3">
+                        <li key={`${employee.sector}-${employee.name}-${employee.email ?? ''}`} className="rounded-xl border border-white/[0.06] bg-[#0a1017] p-3">
                           <p className="text-sm font-medium text-slate-100">{employee.name}</p>
                           {employee.jobTitle && <p className="mt-1 text-xs text-slate-500">{employee.jobTitle}</p>}
-                          <div className="mt-3 space-y-2">
-                            {employee.phone ? (
-                              <a href={`tel:${employee.phone.replace(/[^+0-9]/g, '')}`} className="flex items-center gap-2 text-xs text-slate-300 transition hover:text-cyan-200"><Phone className="size-3.5 text-cyan-300" aria-hidden="true" />{employee.phone}</a>
-                            ) : (
-                              <p className="flex items-center gap-2 text-xs text-slate-500"><Phone className="size-3.5" aria-hidden="true" />Telefone não informado</p>
-                            )}
+                          <div className="mt-3 flex flex-col gap-3">
                             {employee.email ? (
                               <a href={`mailto:${employee.email}`} className="flex min-w-0 items-center gap-2 break-all text-xs text-slate-300 transition hover:text-cyan-200"><Mail className="size-3.5 shrink-0 text-cyan-300" aria-hidden="true" />{employee.email}</a>
                             ) : (
                               <p className="text-xs text-slate-500">E-mail não informado</p>
                             )}
+                            {employee.phone && employee.whatsappEnabled ? (
+                              <a href={`https://wa.me/${employee.phone.replace(/\D/g, '')}?text=${encodeURIComponent(getWhatsAppMessage(employee))}`} target="_blank" rel="noopener noreferrer" aria-label={`Falar com ${employee.name} pelo WhatsApp sobre ${employee.sector}`} className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/[.08] px-3 py-2 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-400/[.15]"><MessageCircle className="size-4 text-emerald-300" aria-hidden="true" />Chamar no WhatsApp</a>
+                            ) : employee.phone ? (
+                              <a href={`tel:${employee.phone}`} className="flex min-w-0 items-center gap-2 break-all text-xs text-slate-300 transition hover:text-cyan-200"><Phone className="size-3.5 shrink-0 text-cyan-300" aria-hidden="true" />{employee.phone}</a>
+                            ) : null}
                           </div>
                         </li>
                       ))}

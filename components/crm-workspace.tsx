@@ -2,7 +2,8 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Building2, Check, Eye, Inbox, Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
+import { ClientContactCodeManager } from '@/components/client-contact-code-manager'
+import { Building2, Check, Eye, Inbox, KeyRound, Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
 import { ListingControls } from '@/components/listing-controls'
 
 type Module = 'leads' | 'clients' | 'messages'
@@ -29,7 +30,9 @@ export function CrmWorkspace({ initialModule = 'leads', permissions = [] }: { in
   const [modal, setModal] = useState(false)
   const [record, setRecord] = useState<RecordData | null>(null)
   const [editingRecord, setEditingRecord] = useState(false)
+  const [clientCodeClient, setClientCodeClient] = useState<{ id: string; legal_name: string } | null>(null)
 
+  const isAdmin = permissions.includes('*')
   const canCreate = permissions.includes('*') || permissions.includes(`${moduleForPermission[module]}:create`)
   const canUpdate = permissions.includes('*') || permissions.includes(`${moduleForPermission[module]}:update`)
   const canDelete = permissions.includes('*') || permissions.includes(`${moduleForPermission[module]}:delete`)
@@ -131,7 +134,7 @@ export function CrmWorkspace({ initialModule = 'leads', permissions = [] }: { in
         <td className="px-5 py-3 font-medium text-slate-200">{module === 'leads' ? (item as Lead).name : module === 'clients' ? (item as Client).legal_name : (item as Message).sender}</td>
         <td className="px-5 py-3 text-slate-400">{module === 'leads' ? (item as Lead).status : module === 'clients' ? ((item as Client).email || (item as Client).phone || 'Sem contato') : (item as Message).subject}</td>
         <td className="px-5 py-3 text-slate-500">{module === 'leads' ? ((item as Lead).source || 'Não informado') : module === 'clients' ? (item as Client).status : (item as Message).channel}</td>
-        <td className="px-5 py-3 text-right"><div className="inline-flex gap-1"><button onClick={() => { setRecord(item); setEditingRecord(false); setError('') }} aria-label="Ver detalhes" className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><Eye className="size-3.5" /></button>{canUpdate && <button onClick={() => { setRecord(item); setEditingRecord(true); setError('') }} aria-label="Editar registro" className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil className="size-3.5" /></button>}{canDelete && <button onClick={() => void remove(item.id)} className="rounded p-1.5 text-slate-600 hover:bg-rose-400/10 hover:text-rose-300" aria-label="Excluir registro"><Trash2 className="size-3.5" /></button>}</div></td>
+        <td className="px-5 py-3 text-right"><div className="inline-flex gap-1"><button onClick={() => { setRecord(item); setEditingRecord(false); setError('') }} aria-label="Ver detalhes" className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><Eye className="size-3.5" /></button>{canUpdate && <button onClick={() => { setRecord(item); setEditingRecord(true); setError('') }} aria-label="Editar registro" className="rounded p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil className="size-3.5" /></button>}{canDelete && <button onClick={() => void remove(item.id)} className="rounded p-1.5 text-slate-600 hover:bg-rose-400/10 hover:text-rose-300" aria-label="Excluir registro"><Trash2 className="size-3.5" /></button>}{module === 'clients' && isAdmin && <button type="button" onClick={() => setClientCodeClient(item as Client)} aria-label={`Gerenciar códigos de ${(item as Client).legal_name}`} title="Gerenciar código do cliente" className="rounded p-1.5 text-blue-300 hover:bg-blue-400/10 hover:text-blue-200"><KeyRound className="size-3.5" /></button>}</div></td>
       </tr>)}</tbody>
     </table>}</div>
     {modal && <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4"><div className="w-full max-w-lg rounded-xl border border-white/10 bg-[#151b24] p-5 shadow-2xl">
@@ -153,5 +156,6 @@ export function CrmWorkspace({ initialModule = 'leads', permissions = [] }: { in
       </div>}
       {error && <p role="alert" className="mt-4 rounded-lg bg-amber-400/10 p-3 text-xs text-amber-300">{error}</p>}
     </div></div>}
+    {isAdmin && clientCodeClient && <ClientContactCodeManager client={clientCodeClient} onClose={() => setClientCodeClient(null)} />}
   </section>
 }
