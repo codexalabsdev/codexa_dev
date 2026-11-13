@@ -37,20 +37,66 @@ type FinanceTab = 'overview' | 'receivable' | 'payable' | 'recurring' | 'cashflo
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0))
 const inputClass = 'w-full rounded-lg border border-white/10 bg-[#151b24] px-3 py-2 text-sm text-white'
 
-function getOpenBalance(item: Receivable | Payable) {
-  const amount = 'amount' in item ? Number(item.amount || 0) : Number(item.final_amount || 0)
-  const paid = Number(item.paid_amount || 0)
-  return Math.max(amount - paid, 0)
+function getRecordTotal(item: Receivable | Payable) {
+  return 'amount' in item ? Number(item.amount || 0) : Number(item.final_amount || 0)
 }
 
 function isSettledStatus(status: string) {
-  return ['pago', 'recebido', 'quitado', 'paid', 'received', 'settled'].includes(status.trim().toLocaleLowerCase('pt-BR'))
+  return ['pago', 'paga', 'recebido', 'recebida', 'quitado', 'paid', 'received', 'settled'].includes(status.trim().toLocaleLowerCase('pt-BR'))
+}
+
+function isCancelledStatus(status: string) {
+  return ['cancelado', 'cancelada', 'canceled', 'cancelled'].includes(status.trim().toLocaleLowerCase('pt-BR'))
+}
+
+function isRecordSettled(item: Receivable | Payable) {
+  const total = getRecordTotal(item)
+  return isSettledStatus(item.status) || (total > 0 && Number(item.paid_amount || 0) >= total)
+}
+
+function getOpenBalance(item: Receivable | Payable) {
+  if (isRecordSettled(item) || isCancelledStatus(item.status)) return 0
+  return Math.max(getRecordTotal(item) - Number(item.paid_amount || 0), 0)
 }
 
 function isOverdue(item: Receivable | Payable) {
-  if (!item.due_date || isSettledStatus(item.status) || getOpenBalance(item) <= 0) return false
+  if (!item.due_date || isRecordSettled(item) || isCancelledStatus(item.status) || getOpenBalance(item) <= 0) return false
   const due = new Date(`${item.due_date.slice(0, 10)}T12:00:00`)
   return due.getTime() < Date.now()
+}
+
+function getSettlementStatus(item: Receivable | Payable) {
+  return 'beneficiary' in item ? 'Pago' : 'Recebido'
+}
+
+function getSettlementLabel(item: Receivable | Payable) {
+  return 'beneficiary' in item ? 'Paga' : 'Recebida'
+}
+
+function getSelectedStatus(item: Receivable | Payable) {
+  if (isRecordSettled(item)) return getSettlementStatus(item)
+  if (item.status.trim().toLocaleLowerCase('pt-BR') === 'pendente') return 'Pendente'
+  return item.status || 'Pendente'
+}
+
+function getStatusLabel(item: Receivable | Payable) {
+  if (isCancelledStatus(item.status)) return 'Cancelada'
+  if (isRecordSettled(item)) return getSettlementLabel(item)
+  if (isOverdue(item)) return 'Atrasada'
+  if (Number(item.paid_amount || 0) > 0) return 'beneficiary' in item ? 'Parcialmente paga' : 'Parcialmente recebida'
+  return item.status || 'Pendente'
+}
+
+function getStatusOptions(item: Receivable | Payable) {
+  const options = [
+    { value: 'Pendente', label: 'Pendente' },
+    { value: getSettlementStatus(item), label: getSettlementLabel(item) },
+  ]
+  const currentStatus = item.status.trim()
+  if (currentStatus && !options.some((option) => option.value.toLocaleLowerCase('pt-BR') === currentStatus.toLocaleLowerCase('pt-BR'))) {
+    options.push({ value: currentStatus, label: getStatusLabel(item) })
+  }
+  return options
 }
 
 function withinRange(dateValue: string | null | undefined, range: RangeOption) {
@@ -180,6 +226,32 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
     else { setRecord(null); setEditingRecord(false); setMessage('Lançamento excluído.'); await load() }
   }
 
+  async function updateRecordStatus(item: FinanceRecord, nextStatus: string) {
+    if (!canUpdate || !getStatusOptions(item).some((option) => option.value === nextStatus)) return
+    const wasSettled = isRecordSettled(item)
+    const becomesPending = nextStatus.toLocaleLowerCase('pt-BR') === 'pendente'
+    if (wasSettled && becomesPending && !window.confirm('Voltar para pendente vai zerar o valor marcado como pago. Deseja continuar?')) return
+
+    const payload: { status: string; paid_amount?: number } = { status: nextStatus }
+    if (isSettledStatus(nextStatus)) payload.paid_amount = getRecordTotal(item)
+    else if (wasSettled && becomesPending) payload.paid_amount = 0
+
+    setSaving(true)
+    setMessage('')
+    const table = 'beneficiary' in item ? 'accounts_payable' : 'accounts_receivable'
+    const { data, error } = await createClient().from(table).update(payload).eq('id', item.id).select('id').maybeSingle()
+    if (error) setMessage(`Não foi possível alterar o status: ${error.message}`)
+    else if (!data) setMessage('O lançamento não foi alterado. Verifique sua permissão para atualizar registros financeiros.')
+    else {
+      const updatedItem = { ...item, ...payload } as FinanceRecord
+      if ('beneficiary' in item) setPayables((current) => current.map((entry) => entry.id === item.id ? updatedItem as Payable : entry))
+      else setReceivables((current) => current.map((entry) => entry.id === item.id ? updatedItem as Receivable : entry))
+      setRecord((current) => current?.id === item.id ? updatedItem : current)
+      setMessage('Status atualizado.')
+    }
+    setSaving(false)
+  }
+
   async function saveRecord(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!record || !canUpdate) return
@@ -187,9 +259,30 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
     setMessage('')
     const data = Object.fromEntries(new FormData(event.currentTarget).entries())
     const table = tab === 'payable' ? 'accounts_payable' : 'accounts_receivable'
+    const nextStatus = String(data.status || getSelectedStatus(record))
+    const amount = record.paid_amount === 0 ? Number(data.amount) : getRecordTotal(record)
+    if (!getStatusOptions(record).some((option) => option.value === nextStatus)) {
+      setMessage('Selecione um status válido.')
+      setSaving(false)
+      return
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setMessage('Informe um valor válido para o lançamento.')
+      setSaving(false)
+      return
+    }
+    const wasSettled = isRecordSettled(record)
+    const becomesPending = nextStatus.toLocaleLowerCase('pt-BR') === 'pendente'
+    if (wasSettled && becomesPending && !window.confirm('Voltar para pendente vai zerar o valor marcado como pago. Deseja continuar?')) {
+      setSaving(false)
+      return
+    }
+    const statusPayload: { status: string; paid_amount?: number } = { status: nextStatus }
+    if (isSettledStatus(nextStatus)) statusPayload.paid_amount = amount
+    else if (wasSettled && becomesPending) statusPayload.paid_amount = 0
     const payload = tab === 'payable'
-      ? { beneficiary: data.beneficiary, description: data.description, due_date: data.due_date, ...(record.paid_amount === 0 ? { amount: Number(data.amount) } : {}) }
-      : { description: data.description, due_date: data.due_date, ...(record.paid_amount === 0 ? { final_amount: Number(data.amount), original_amount: Number(data.amount) } : {}) }
+      ? { beneficiary: data.beneficiary, description: data.description, due_date: data.due_date, ...statusPayload, ...(record.paid_amount === 0 ? { amount: Number(data.amount) } : {}) }
+      : { description: data.description, due_date: data.due_date, ...statusPayload, ...(record.paid_amount === 0 ? { final_amount: Number(data.amount), original_amount: Number(data.amount) } : {}) }
     const { error: updateError } = await createClient().from(table).update(payload).eq('id', record.id)
     if (updateError) setMessage(`Não foi possível salvar as alterações: ${updateError.message}`)
     else { setRecord(null); setEditingRecord(false); await load() }
@@ -627,19 +720,22 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
           <ListingControls total={tab === 'payable' ? filteredPayables.length : filteredReceivables.length} page={page} onPageChange={setPage} hasActiveFilters={Boolean(query)} onClear={() => { setQuery(''); setPage(0) }} />
           <div className="divide-y divide-white/[0.06]">
             {visibleFinanceRows.map((item) => (
-              <div key={item.id} className="flex items-center justify-between gap-4 px-5 py-4">
+              <div key={item.id} className="flex flex-col justify-between gap-3 px-5 py-4 sm:flex-row sm:items-center sm:gap-4">
                 <div>
                   <p className="text-sm text-slate-200">{item.description}</p>
                   <p className="mt-1 text-[11px] text-slate-500">{'beneficiary' in item ? item.beneficiary : item.category} · vencimento {item.due_date ? new Date(`${item.due_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : 'Não informado'}</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
                   <div className="text-right">
-                    <p className="text-sm font-semibold text-white">{money('amount' in item ? item.amount : item.final_amount)}</p>
-                    <p className="text-[11px] text-slate-500">{item.status}</p>
+                    <p className="text-sm font-semibold text-white">{money(getRecordTotal(item))}</p>
+                    <p className="text-[11px] text-slate-500">{getStatusLabel(item)}</p>
                   </div>
-                  <button onClick={() => { setRecord(item); setEditingRecord(false); setMessage('') }} aria-label="Ver detalhes" className="rounded p-2 text-slate-400 hover:bg-white/5 hover:text-white"><Eye className="size-4" /></button>
-                  {canUpdate && <button onClick={() => { setRecord(item); setEditingRecord(true); setMessage('') }} aria-label="Editar lançamento" className="rounded p-2 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil className="size-4" /></button>}
-                  {canDelete && <button onClick={() => void deleteRecord(item)} aria-label="Excluir lançamento" className="rounded p-2 text-slate-500 hover:bg-rose-500/10 hover:text-rose-300"><Trash2 className="size-4" /></button>}
+                  {canUpdate && <select aria-label={`Alterar status de ${item.description}`} disabled={saving} value={getSelectedStatus(item)} onChange={(event) => void updateRecordStatus(item, event.target.value)} className={`${inputClass} w-auto min-w-[136px] py-2 text-xs disabled:opacity-50`}>
+                    {getStatusOptions(item).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>}
+                  <button onClick={() => { setRecord(item); setEditingRecord(false); setMessage('') }} aria-label={`Ver detalhes de ${item.description}`} className="rounded p-2 text-slate-400 hover:bg-white/5 hover:text-white"><Eye className="size-4" /></button>
+                  {canUpdate && <button onClick={() => { setRecord(item); setEditingRecord(true); setMessage('') }} aria-label={`Editar lançamento ${item.description}`} className="rounded p-2 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil className="size-4" /></button>}
+                  {canDelete && <button onClick={() => void deleteRecord(item)} aria-label={`Excluir lançamento ${item.description}`} className="rounded p-2 text-slate-500 hover:bg-rose-500/10 hover:text-rose-300"><Trash2 className="size-4" /></button>}
                 </div>
               </div>
             ))}
@@ -654,10 +750,14 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
         {'beneficiary' in record && <label className="text-xs text-slate-400">Beneficiário<input name="beneficiary" required defaultValue={record.beneficiary} className={`${inputClass} mt-1`} /></label>}
         <label className="text-xs text-slate-400">Descrição<input name="description" required defaultValue={record.description} className={`${inputClass} mt-1`} /></label>
         <label className="text-xs text-slate-400">Vencimento<input name="due_date" type="date" required defaultValue={record.due_date?.slice(0, 10) || ''} className={`${inputClass} mt-1`} /></label>
+        <label className="text-xs text-slate-400">Status<select name="status" defaultValue={getSelectedStatus(record)} className={`${inputClass} mt-1`}>
+          {getStatusOptions(record).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select></label>
+        <p className="text-[11px] text-slate-500">“Atrasada” é calculada pelo vencimento; pagamentos parciais aparecem conforme o valor já pago.</p>
         <label className="text-xs text-slate-400">Valor<input name="amount" type="number" min="0.01" step="0.01" required disabled={record.paid_amount > 0} defaultValue={'amount' in record ? record.amount : record.final_amount} className={`${inputClass} mt-1 disabled:opacity-50`} /></label>
         {record.paid_amount > 0 && <p className="text-xs text-amber-300">O valor não pode ser alterado após a existência de pagamentos registrados.</p>}
         <div className="flex justify-end gap-2"><button type="button" onClick={() => setEditingRecord(false)} className="rounded-lg px-3 py-2 text-xs text-slate-300">Cancelar</button><button disabled={saving} className="rounded-lg bg-blue-500 px-4 py-2 text-xs font-semibold text-white">{saving ? 'Salvando...' : 'Salvar alterações'}</button></div>
-      </form> : <><div className="grid gap-4 text-sm sm:grid-cols-2"><p className="text-slate-400">Valor<span className="mt-1 block text-slate-200">{money('amount' in record ? record.amount : record.final_amount)}</span></p><p className="text-slate-400">Pago<span className="mt-1 block text-slate-200">{money(record.paid_amount)}</span></p><p className="text-slate-400">Vencimento<span className="mt-1 block text-slate-200">{record.due_date ? new Date(`${record.due_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : 'Não informado'}</span></p><p className="text-slate-400">Status<span className="mt-1 block text-slate-200">{record.status}</span></p><p className="text-slate-400 sm:col-span-2">{'beneficiary' in record ? 'Beneficiário' : 'Categoria'}<span className="mt-1 block text-slate-200">{'beneficiary' in record ? record.beneficiary : record.category}</span></p></div><div className="mt-5 flex justify-end gap-2"><button onClick={() => setRecord(null)} className="rounded-lg px-3 py-2 text-xs text-slate-300">Fechar</button>{canUpdate && <button onClick={() => setEditingRecord(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-2 text-xs font-semibold text-white"><Pencil className="size-3.5" />Editar</button>}</div></>}
+      </form> : <><div className="grid gap-4 text-sm sm:grid-cols-2"><p className="text-slate-400">Valor<span className="mt-1 block text-slate-200">{money('amount' in record ? record.amount : record.final_amount)}</span></p><p className="text-slate-400">Pago<span className="mt-1 block text-slate-200">{money(record.paid_amount)}</span></p><p className="text-slate-400">Vencimento<span className="mt-1 block text-slate-200">{record.due_date ? new Date(`${record.due_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : 'Não informado'}</span></p><p className="text-slate-400">Status<span className="mt-1 block text-slate-200">{getStatusLabel(record)}</span></p><p className="text-slate-400 sm:col-span-2">{'beneficiary' in record ? 'Beneficiário' : 'Categoria'}<span className="mt-1 block text-slate-200">{'beneficiary' in record ? record.beneficiary : record.category}</span></p></div><div className="mt-5 flex justify-end gap-2"><button onClick={() => setRecord(null)} className="rounded-lg px-3 py-2 text-xs text-slate-300">Fechar</button>{canUpdate && <button onClick={() => setEditingRecord(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-2 text-xs font-semibold text-white"><Pencil className="size-3.5" />Editar</button>}</div></>}
     </div></div>}
   </section>
 }
