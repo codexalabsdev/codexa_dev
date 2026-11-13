@@ -13,7 +13,7 @@ export async function GET() {
     const { supabase } = await requireWorkspacePermission('users', 'manage_users')
     const [{ data: members, error: membersError }, { data: roles, error: rolesError }] = await Promise.all([
       supabase.from('team_members')
-        .select('id,user_id,full_name,email,job_title,department,joined_on,role_name,status,created_at,updated_at')
+        .select('id,user_id,full_name,email,phone,job_title,department,joined_on,role_name,status,created_at,updated_at')
         .order('full_name')
         .limit(2000),
       supabase.from('access_roles').select('name,is_active').eq('is_active', true).order('name'),
@@ -35,15 +35,16 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  let body: { email?: unknown; fullName?: unknown; roleName?: unknown; password?: unknown }
+  let body: { email?: unknown; fullName?: unknown; phone?: unknown; roleName?: unknown; password?: unknown }
   try {
-    body = await request.json() as { email?: unknown; fullName?: unknown; roleName?: unknown; password?: unknown }
+    body = await request.json() as { email?: unknown; fullName?: unknown; phone?: unknown; roleName?: unknown; password?: unknown }
   } catch {
     return NextResponse.json({ error: 'Corpo da solicitação inválido.' }, { status: 400 })
   }
   if (typeof body.email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email.trim())
     || typeof body.fullName !== 'string' || body.fullName.trim().length < 2 || body.fullName.trim().length > 200
-    || typeof body.roleName !== 'string') {
+    || typeof body.roleName !== 'string'
+    || (body.phone !== undefined && typeof body.phone !== 'string')) {
     return NextResponse.json({ error: 'Nome, e-mail ou cargo inválido.' }, { status: 400 })
   }
 
@@ -51,6 +52,8 @@ export async function POST(request: Request) {
     const actor = await requireWorkspacePermission('users', 'manage_users')
     const email = body.email.trim().toLowerCase()
     const fullName = body.fullName.trim()
+    const phone = typeof body.phone === 'string' ? body.phone.trim() : ''
+    if (phone && !/^[+()\d.\-\s]{7,40}$/.test(phone)) return NextResponse.json({ error: 'Informe um telefone válido.' }, { status: 400 })
     const { data: role, error: roleError } = await actor.supabase
       .from('access_roles').select('id,name,is_active').eq('name', body.roleName).maybeSingle()
     if (roleError) throw roleError
@@ -153,6 +156,7 @@ export async function POST(request: Request) {
         user_id: authUser.id,
         full_name: fullName,
         email,
+        phone: phone || null,
         role_name: role.name,
         status: 'Ativo',
         updated_at: new Date().toISOString(),
@@ -162,12 +166,13 @@ export async function POST(request: Request) {
         user_id: authUser.id,
         full_name: fullName,
         email,
+        phone: phone || null,
         role_name: role.name,
         status: 'Ativo',
         joined_on: new Date().toISOString().slice(0, 10),
       })
     let { data: member, error: memberError } = await memberQuery
-      .select('id,user_id,full_name,email,job_title,department,joined_on,role_name,status,created_at,updated_at').single()
+      .select('id,user_id,full_name,email,phone,job_title,department,joined_on,role_name,status,created_at,updated_at').single()
     if (memberError || !member) {
       console.error('Team account membership creation failed:', memberError?.message ?? 'Membership returned no row')
       if (createdAuthUser) {
@@ -183,7 +188,7 @@ export async function POST(request: Request) {
         .from('team_members')
         .update({ user_id: authUser.id, updated_at: new Date().toISOString() })
         .eq('id', member.id)
-        .select('id,user_id,full_name,email,job_title,department,joined_on,role_name,status,created_at,updated_at')
+        .select('id,user_id,full_name,email,phone,job_title,department,joined_on,role_name,status,created_at,updated_at')
         .single()
       if (repairError || repairedMember?.user_id !== authUser.id) {
         console.error('Team account link invariant failed:', repairError?.message ?? 'user_id was not persisted')

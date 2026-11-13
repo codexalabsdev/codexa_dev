@@ -134,7 +134,7 @@ type DashboardRankingMember = { id: string; full_name: string; role_name: string
 type DashboardActivity = { id: string; summary: string; created_at: string }
 type DashboardDue = { description: string; due_date: string; amount: number }
 type DashboardProjectStatus = { status: string; count: number }
-type DashboardData = { team: number; leads: number; clients: number; projects: number; tickets: number; contracts: number; messages: number; openReceivables: number; overdueReceivables: number; receivedThisMonth: number; ranking: DashboardRankingMember[]; activity: DashboardActivity[]; upcoming: DashboardDue[]; projectStatus: DashboardProjectStatus[] }
+type DashboardData = { team: number; leads: number; clients: number; projects: number; tickets: number; contracts: number; openReceivables: number; overdueReceivables: number; receivedThisMonth: number; ranking: DashboardRankingMember[]; activity: DashboardActivity[]; upcoming: DashboardDue[]; projectStatus: DashboardProjectStatus[] }
 
 function DashboardDataPanels({ data }: { data: DashboardData }) {
   const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -164,7 +164,7 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
   const [notificationsLoading, setNotificationsLoading] = useState(false)
   const [notificationsError, setNotificationsError] = useState('')
   const [actionableNotificationIds, setActionableNotificationIds] = useState<string[]>([])
-  const [dashboardData, setDashboardData] = useState<DashboardData>({ team: 0, leads: 0, clients: 0, projects: 0, tickets: 0, contracts: 0, messages: 0, openReceivables: 0, overdueReceivables: 0, receivedThisMonth: 0, ranking: [], activity: [], upcoming: [], projectStatus: [] })
+  const [dashboardData, setDashboardData] = useState<DashboardData>({ team: 0, leads: 0, clients: 0, projects: 0, tickets: 0, contracts: 0, openReceivables: 0, overdueReceivables: 0, receivedThisMonth: 0, ranking: [], activity: [], upcoming: [], projectStatus: [] })
   const [profileAvatarUrl, setProfileAvatarUrl] = useState('')
   const [profileNickname, setProfileNickname] = useState('')
   const searchInput = useRef<HTMLInputElement>(null)
@@ -225,8 +225,8 @@ function DashboardContent({ initialSection = 'Dashboard', page, permissions, pro
     if (activeSection !== 'Dashboard') return
     void fetch('/api/workspace/dashboard', { cache: 'no-store' }).then(async (response) => {
       if (!response.ok) return
-      const data = await response.json() as { metrics?: { team?: number; leads?: number; clients?: number; projects?: number; tickets?: number; contracts?: number; messages?: number; openReceivables?: number; overdueReceivables?: number; receivedThisMonth?: number }; ranking?: DashboardRankingMember[]; activity?: DashboardActivity[]; upcoming?: DashboardDue[]; projectStatus?: DashboardProjectStatus[] }
-      setDashboardData({ team: data.metrics?.team ?? 0, leads: data.metrics?.leads ?? 0, clients: data.metrics?.clients ?? 0, projects: data.metrics?.projects ?? 0, tickets: data.metrics?.tickets ?? 0, contracts: data.metrics?.contracts ?? 0, messages: data.metrics?.messages ?? 0, openReceivables: data.metrics?.openReceivables ?? 0, overdueReceivables: data.metrics?.overdueReceivables ?? 0, receivedThisMonth: data.metrics?.receivedThisMonth ?? 0, ranking: data.ranking ?? [], activity: data.activity ?? [], upcoming: data.upcoming ?? [], projectStatus: data.projectStatus ?? [] })
+      const data = await response.json() as { metrics?: { team?: number; leads?: number; clients?: number; projects?: number; tickets?: number; contracts?: number; openReceivables?: number; overdueReceivables?: number; receivedThisMonth?: number }; ranking?: DashboardRankingMember[]; activity?: DashboardActivity[]; upcoming?: DashboardDue[]; projectStatus?: DashboardProjectStatus[] }
+      setDashboardData({ team: data.metrics?.team ?? 0, leads: data.metrics?.leads ?? 0, clients: data.metrics?.clients ?? 0, projects: data.metrics?.projects ?? 0, tickets: data.metrics?.tickets ?? 0, contracts: data.metrics?.contracts ?? 0, openReceivables: data.metrics?.openReceivables ?? 0, overdueReceivables: data.metrics?.overdueReceivables ?? 0, receivedThisMonth: data.metrics?.receivedThisMonth ?? 0, ranking: data.ranking ?? [], activity: data.activity ?? [], upcoming: data.upcoming ?? [], projectStatus: data.projectStatus ?? [] })
     })
   }, [activeSection])
 

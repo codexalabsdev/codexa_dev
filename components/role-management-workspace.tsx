@@ -19,6 +19,7 @@ type Member = {
   user_id: string | null
   full_name: string
   email: string
+  phone?: string | null
   job_title?: string | null
   department?: string | null
   joined_on?: string | null
@@ -367,6 +368,7 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
         body: JSON.stringify({
           fullName: form.get('fullName'),
           email: form.get('email'),
+          phone: form.get('phone'),
           roleName: form.get('roleName'),
           password: form.get('password') || undefined,
         }),
@@ -393,7 +395,7 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
     try {
       const result = await api<{ warning?: string | null }>(`/api/admin/rbac/users/${editingMember.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ fullName: form.get('fullName'), email: form.get('email') }),
+        body: JSON.stringify({ fullName: form.get('fullName'), email: form.get('email'), phone: form.get('phone') }),
       })
       setEditingMember(null)
       setNotice(result.warning || 'Dados do usuário atualizados e registrados na auditoria.')
@@ -472,16 +474,18 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
           <span className="sr-only">Pesquisar usuários</span>
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Pesquisar por apelido, nome, cargo ou setor" className="w-full bg-transparent text-sm text-slate-200 outline-none placeholder:text-slate-600" />
         </label>
-        {inviteOpen && <form onSubmit={(event) => void inviteMember(event)} className="grid gap-3 rounded-xl border border-white/[0.07] bg-[#11161e] p-5 sm:grid-cols-2 xl:grid-cols-5">
+        {inviteOpen && <form onSubmit={(event) => void inviteMember(event)} className="grid gap-3 rounded-xl border border-white/[0.07] bg-[#11161e] p-5 sm:grid-cols-2 xl:grid-cols-6">
           <label className="text-xs text-slate-500">Nome<input name="fullName" required minLength={2} maxLength={200} className={inputClass} /></label>
           <label className="text-xs text-slate-500">E-mail<input name="email" type="email" required className={inputClass} /></label>
+          <label className="text-xs text-slate-500">Telefone<input name="phone" type="tel" maxLength={40} placeholder="+55 (11) 99999-9999" className={inputClass} /></label>
           <label className="text-xs text-slate-500">Senha inicial (conta nova)<input name="password" type="password" minLength={8} maxLength={128} autoComplete="new-password" className={inputClass} /><span className="mt-1 block text-[10px] text-slate-600">Obrigatória para conta nova; deixe vazia para vincular uma conta já existente.</span></label>
           <label className="text-xs text-slate-500">Cargo<select name="roleName" required className={inputClass}>{roles.filter((item) => item.is_active).map((item) => <option key={item.id}>{item.name}</option>)}</select></label>
           <button disabled={saving} className="mt-auto flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-50">{saving ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}Criar usuário</button>
         </form>}
-        {editingMember && <form onSubmit={(event) => void saveMemberProfile(event)} className="grid gap-3 rounded-xl border border-white/[0.07] bg-[#11161e] p-5 sm:grid-cols-[1fr_1fr_auto_auto]">
+        {editingMember && <form onSubmit={(event) => void saveMemberProfile(event)} className="grid gap-3 rounded-xl border border-white/[0.07] bg-[#11161e] p-5 sm:grid-cols-[1fr_1fr_1fr_auto_auto]">
           <label className="text-xs text-slate-500">Nome<input name="fullName" required minLength={2} maxLength={200} defaultValue={editingMember.full_name} className={inputClass} /></label>
           <label className="text-xs text-slate-500">E-mail<input name="email" type="email" required defaultValue={editingMember.email} className={inputClass} /></label>
+          <label className="text-xs text-slate-500">Telefone<input name="phone" type="tel" maxLength={40} defaultValue={editingMember.phone ?? ""} placeholder="+55 (11) 99999-9999" className={inputClass} /></label>
           <button disabled={saving} className="mt-auto flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-50">{saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}Salvar</button>
           <button type="button" onClick={() => setEditingMember(null)} className="mt-auto rounded-lg border border-white/[0.08] px-3 py-2.5 text-xs text-slate-300">Cancelar</button>
         </form>}
@@ -508,6 +512,7 @@ export function RoleManagementWorkspace({ initialView = 'roles' }: { initialView
           <div className="flex items-start justify-between gap-4"><div><p className="text-xs uppercase tracking-wider text-blue-300">Usuário</p><h2 id="member-details-title" className="mt-1 text-lg font-semibold text-white">{memberDetails.full_name}</h2></div><button type="button" onClick={() => setMemberDetails(null)} aria-label="Fechar detalhes"><X className="size-5 text-slate-400" /></button></div>
           <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2">
             <div><dt className="text-xs text-slate-500">E-mail</dt><dd className="mt-1 break-all text-slate-200">{memberDetails.email}</dd></div>
+            <div><dt className="text-xs text-slate-500">Telefone</dt><dd className="mt-1 text-slate-200">{memberDetails.phone || "Não informado"}</dd></div>
             <div><dt className="text-xs text-slate-500">Cargo</dt><dd className="mt-1 text-slate-200">{memberDetails.job_title || memberDetails.role_name}</dd></div>
             <div><dt className="text-xs text-slate-500">Setor</dt><dd className="mt-1 text-slate-200">{memberDetails.department || 'Não informado'}</dd></div>
             <div><dt className="text-xs text-slate-500">Entrada na equipe</dt><dd className="mt-1 text-slate-200">{memberDetails.joined_on ? new Date(memberDetails.joined_on).toLocaleDateString('pt-BR') : 'Não informado'}</dd></div>

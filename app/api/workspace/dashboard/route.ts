@@ -14,12 +14,11 @@ export async function GET() {
       actor.supabase.from('projects').select('id', { count: 'exact', head: true }),
       actor.supabase.from('support_tickets').select('id', { count: 'exact', head: true }).in('status', ['open', 'in_progress', 'pending']),
       actor.supabase.from('contracts').select('id', { count: 'exact', head: true }).eq('status', 'active'),
-      actor.supabase.from('public_contact_messages').select('id', { count: 'exact', head: true }).eq('status', 'new'),
       actor.supabase.from('accounts_receivable').select('description,final_amount,paid_amount,due_date,status').order('due_date', { ascending: true }).limit(20),
       actor.supabase.from('project_activity').select('id,summary,created_at').order('created_at', { ascending: false }).limit(5),
       actor.supabase.from('projects').select('status'),
     ])
-    const [membersResult, levelsResult, leadsResult, clientsResult, projectsResult, ticketsResult, contractsResult, messagesResult, receivablesResult, activityResult, projectStatusResult] = results
+    const [membersResult, levelsResult, leadsResult, clientsResult, projectsResult, ticketsResult, contractsResult, receivablesResult, activityResult, projectStatusResult] = results
     if (membersResult.error) throw new AdminApiError('Não foi possível carregar o ranking da equipe.', 503)
     const levels = (levelsResult.data ?? []).filter((level) => (level as { is_active?: boolean | null }).is_active !== false)
     const ranking = (membersResult.data ?? []).map((member) => {
@@ -46,7 +45,7 @@ export async function GET() {
       return due && due >= today && due <= new Date(today.getTime() + 30 * 86400000) && !isSettled(row.status) && Number(row.final_amount ?? 0) - Number(row.paid_amount ?? 0) > 0
     }).slice(0, 5).map((row) => ({ description: row.description || 'Lançamento financeiro', due_date: row.due_date, amount: Math.max(Number(row.final_amount ?? 0) - Number(row.paid_amount ?? 0), 0) }))
     const projectStatus = Object.entries((projectStatusResult.data ?? []).reduce<Record<string, number>>((counts, row) => { const status = String(row.status ?? 'Sem status'); counts[status] = (counts[status] ?? 0) + 1; return counts }, {})).map(([status, count]) => ({ status, count }))
-    return NextResponse.json({ metrics: { team: membersResult.data?.filter((member) => ['active', 'ativo', 'enabled', 'habilitado'].includes(String(member.status).toLowerCase())).length ?? 0, leads: leadsResult.count ?? 0, clients: clientsResult.count ?? 0, projects: projectsResult.count ?? 0, tickets: ticketsResult.count ?? 0, contracts: contractsResult.count ?? 0, messages: messagesResult.count ?? 0, openReceivables, overdueReceivables, receivedThisMonth }, ranking, activity: activityResult.data ?? [], upcoming, projectStatus, warnings: results.slice(2).filter((result) => result.error).map((result) => result.error?.message) }, { headers: { 'Cache-Control': 'private, no-store' } })
+    return NextResponse.json({ metrics: { team: membersResult.data?.filter((member) => ['active', 'ativo', 'enabled', 'habilitado'].includes(String(member.status).toLowerCase())).length ?? 0, leads: leadsResult.count ?? 0, clients: clientsResult.count ?? 0, projects: projectsResult.count ?? 0, tickets: ticketsResult.count ?? 0, contracts: contractsResult.count ?? 0, openReceivables, overdueReceivables, receivedThisMonth }, ranking, activity: activityResult.data ?? [], upcoming, projectStatus, warnings: results.slice(2).filter((result) => result.error).map((result) => result.error?.message) }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     if (error instanceof AdminApiError) return NextResponse.json({ error: error.message }, { status: error.status })
     console.error('Dashboard overview failed:', error)

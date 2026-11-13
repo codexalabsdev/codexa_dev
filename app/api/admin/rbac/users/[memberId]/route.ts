@@ -4,7 +4,7 @@ import { requireWorkspacePermission } from '@/lib/supabase/workspace-auth'
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-type MemberUpdate = { roleName?: unknown; status?: unknown; fullName?: unknown; email?: unknown }
+type MemberUpdate = { roleName?: unknown; status?: unknown; fullName?: unknown; email?: unknown; phone?: unknown }
 
 function fail(error: unknown) {
   if (error instanceof AdminApiError) return NextResponse.json({ error: error.message }, { status: error.status })
@@ -23,7 +23,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ membe
     || (body.status !== undefined && (typeof body.status !== 'string' || !['Ativo', 'Inativo'].includes(body.status)))
     || (body.fullName !== undefined && (typeof body.fullName !== 'string' || body.fullName.trim().length < 2 || body.fullName.trim().length > 200))
     || (body.email !== undefined && (typeof body.email !== 'string' || !emailPattern.test(body.email.trim())))
-    || (body.roleName === undefined && body.status === undefined && body.fullName === undefined && body.email === undefined)) {
+    || (body.phone !== undefined && (typeof body.phone !== 'string' || (body.phone.trim() !== '' && !/^[+()\d.\-\s]{7,40}$/.test(body.phone.trim()))))
+    || (body.roleName === undefined && body.status === undefined && body.fullName === undefined && body.email === undefined && body.phone === undefined)) {
     return NextResponse.json({ error: 'Nome, e-mail, cargo ou status inválido.' }, { status: 400 })
   }
 
@@ -34,7 +35,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ membe
 
     const { data: currentMember, error: memberError } = await actor.supabase
       .from('team_members')
-      .select('id,user_id,full_name,email,role_name,status')
+      .select('id,user_id,full_name,email,phone,role_name,status')
       .eq('id', memberId)
       .maybeSingle()
     if (memberError) throw memberError
@@ -42,7 +43,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ membe
 
     const fullName = typeof body.fullName === 'string' ? body.fullName.trim() : currentMember.full_name
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : currentMember.email
-    const profileChanged = fullName !== currentMember.full_name || email !== currentMember.email
+    const phone = typeof body.phone === 'string' ? body.phone.trim() : currentMember.phone ?? ''
+    const authProfileChanged = fullName !== currentMember.full_name || email !== currentMember.email
+    const profileChanged = authProfileChanged || phone !== (currentMember.phone ?? '')
     if (profileChanged && currentMember.user_id === actor.actorId) {
       return NextResponse.json({ error: 'Não é possível editar os dados da própria conta por este painel.' }, { status: 403 })
     }
@@ -55,7 +58,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ membe
     }
 
     let previousAuthUser: { email?: string; user_metadata: Record<string, unknown> } | null = null
-    if (profileChanged && currentMember.user_id) {
+    if (authProfileChanged && currentMember.user_id) {
       const { data: authResult, error: authLookupError } = await actor.supabase.auth.admin.getUserById(currentMember.user_id)
       if (authLookupError || !authResult.user) {
         console.error('Team auth user lookup failed:', authLookupError?.message ?? 'User not found')
@@ -75,7 +78,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ membe
     let profileUpdated = false
     if (profileChanged) {
       const { error: profileError } = await actor.supabase.from('team_members')
-        .update({ full_name: fullName, email, updated_at: new Date().toISOString() })
+        .update({ full_name: fullName, email, phone: phone || null, updated_at: new Date().toISOString() })
         .eq('id', memberId)
       if (profileError) {
         if (currentMember.user_id && previousAuthUser) {
@@ -102,7 +105,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ membe
       if (updateError || !updated) {
         if (profileUpdated) {
           const { error: rollbackError } = await actor.supabase.from('team_members')
-            .update({ full_name: currentMember.full_name, email: currentMember.email })
+            .update({ full_name: currentMember.full_name, email: currentMember.email, phone: currentMember.phone })
             .eq('id', memberId)
           if (rollbackError) console.error('Team profile rollback failed:', rollbackError.message)
           if (currentMember.user_id && previousAuthUser) {
