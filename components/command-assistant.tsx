@@ -229,11 +229,11 @@ export function CommandAssistant({ context, module, isOpen, onClose, onConversat
       const latestUserMessage = [...messages].reverse().find((message) => message.role === 'user')
       const requestMessages = requestState.current.storageReady
         ? latestUserMessage ? [latestUserMessage] : []
-        : messages.slice(-8).map((message) => ({
+        : messages.map((message) => ({
           id: message.id,
           role: message.role,
           parts: message.parts.flatMap((part): AssistantUIMessage['parts'] => {
-            if (part.type === 'text') return [{ type: 'text' as const, text: part.text.slice(0, 2000) }]
+            if (part.type === 'text') return [{ type: 'text' as const, text: part.text }]
             if (message.id === latestUserMessage?.id && part.type === 'file') return [part]
             return []
           }),

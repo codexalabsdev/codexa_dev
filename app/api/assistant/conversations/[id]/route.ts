@@ -41,20 +41,26 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     if (conversationError) return NextResponse.json({ error: 'Não foi possível carregar esta conversa.' }, { status: 503 })
     if (!conversation) return NextResponse.json({ error: 'Conversa não encontrada.' }, { status: 404 })
 
-    const { data: messages, error: messagesError } = await actor.sessionSupabase
-      .from('assistant_messages')
-      .select('client_message_id,role,content,model_id,metadata,created_at')
-      .eq('conversation_id', id)
-      .eq('user_id', actor.actorId)
-      .order('created_at', { ascending: false })
-      .limit(40)
-    if (messagesError && isAssistantSchemaMissing(messagesError)) {
-      return NextResponse.json({ error: 'Aplique o SQL manual do assistente para habilitar o histórico.', sqlRequired: true }, { status: 503 })
+    const messages: unknown[] = []
+    const messagePageSize = 500
+    for (let offset = 0; ; offset += messagePageSize) {
+      const { data: messagePage, error: messagesError } = await actor.sessionSupabase
+        .from('assistant_messages')
+        .select('client_message_id,role,content,model_id,metadata,created_at')
+        .eq('conversation_id', id)
+        .eq('user_id', actor.actorId)
+        .order('created_at', { ascending: true })
+        .range(offset, offset + messagePageSize - 1)
+      if (messagesError && isAssistantSchemaMissing(messagesError)) {
+        return NextResponse.json({ error: 'Aplique o SQL manual do assistente para habilitar o histórico.', sqlRequired: true }, { status: 503 })
+      }
+      if (messagesError) return NextResponse.json({ error: 'Não foi possível carregar as mensagens.' }, { status: 503 })
+      messages.push(...(messagePage ?? []))
+      if ((messagePage ?? []).length < messagePageSize) break
     }
-    if (messagesError) return NextResponse.json({ error: 'Não foi possível carregar as mensagens.' }, { status: 503 })
 
     return NextResponse.json(
-      { conversation, messages: [...(messages ?? [])].reverse(), storageReady: true },
+      { conversation, messages, storageReady: true },
       { headers: { 'Cache-Control': 'private, no-store' } },
     )
   } catch (error) {
