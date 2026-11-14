@@ -1,7 +1,5 @@
 import 'server-only'
 
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 
 type LineItem = { description?: string; quantity?: number; unit_price_cents?: number }
@@ -42,12 +40,17 @@ export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<U
   const secondary = documentColor(snapshot.issuer?.issuer_secondary_color, '#0F766E')
   const line = accent
   let y = 790
+  const drawRight = (text: string, rightX: number, baseline: number, size: number, font: typeof regular, color: typeof accent) => {
+    page.drawText(text, { x: rightX - font.widthOfTextAtSize(text, size), y: baseline, size, font, color })
+  }
 
   try {
-    const logo = await readFile(join(process.cwd(), 'public', 'codexa-logo.png'))
-    const image = await pdf.embedPng(logo)
-    const size = image.scale(Math.min(110 / image.width, 42 / image.height))
-    page.drawImage(image, { x: 44, y: y - size.height, width: size.width, height: size.height })
+    const response = await fetch('https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Logotipo_futurista_CODEXA_em_neon__1_-removebg-preview-dAgeswjimSLf0J7eFIogrynbTr4DX2.png', { cache: 'force-cache' })
+    if (!response.ok) throw new Error('Não foi possível carregar o logotipo CODEXA.')
+    const image = await pdf.embedPng(new Uint8Array(await response.arrayBuffer()))
+    const size = image.scale(Math.min(132 / image.width, 70 / image.height))
+    page.drawRectangle({ x: 44, y: y - size.height + 5, width: size.width, height: size.height, color: rgb(0.03, 0.04, 0.06) })
+    page.drawImage(image, { x: 44, y: y - size.height + 5, width: size.width, height: size.height })
   } catch {
     page.drawText('CODEXA', { x: 44, y: y - 24, size: 18, font: bold, color: accent })
   }
@@ -78,15 +81,16 @@ export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<U
 
   page.drawLine({ start: { x: 44, y }, end: { x: 551, y }, thickness: 1, color: line })
   y -= 22
-  page.drawText('DESCRIÇÃO', { x: 44, y, size: 8, font: bold, color: secondary })
-  page.drawText('QTD.', { x: 365, y, size: 8, font: bold, color: secondary })
-  page.drawText('VALOR UNIT.', { x: 416, y, size: 8, font: bold, color: secondary })
-  page.drawText('TOTAL', { x: 500, y, size: 8, font: bold, color: secondary })
+  page.drawRectangle({ x: 44, y: y - 8, width: 507, height: 25, color: rgb(0.95, 0.96, 0.97) })
+  page.drawText('DESCRIÇÃO', { x: 52, y, size: 8, font: bold, color: accent })
+  drawRight('QTD.', 372, y, 8, bold, accent)
+  drawRight('VALOR UNIT.', 455, y, 8, bold, accent)
+  drawRight('TOTAL', 543, y, 8, bold, accent)
   y -= 15
   page.drawLine({ start: { x: 44, y }, end: { x: 551, y }, thickness: 1, color: line })
   y -= 22
 
-  for (const item of (snapshot.line_items ?? []).slice(0, 30)) {
+  for (const [index, item] of (snapshot.line_items ?? []).slice(0, 30).entries()) {
     if (y < 160) {
       page = pdf.addPage([595.28, 841.89])
       pages.push(page)
@@ -94,18 +98,21 @@ export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<U
       page.drawText(`Continuação · ${safeText(snapshot.title, 80)}`, { x: 44, y, size: 12, font: bold, color: accent })
       page.drawText(safeText(snapshot.document_number, 80), { x: 400, y, size: 9, font: bold, color: accent })
       y -= 36
-      page.drawText('DESCRIÇÃO', { x: 44, y, size: 8, font: bold, color: secondary })
-      page.drawText('QTD.', { x: 365, y, size: 8, font: bold, color: secondary })
-      page.drawText('VALOR UNIT.', { x: 416, y, size: 8, font: bold, color: secondary })
-      page.drawText('TOTAL', { x: 500, y, size: 8, font: bold, color: secondary })
+      page.drawRectangle({ x: 44, y: y - 8, width: 507, height: 25, color: rgb(0.95, 0.96, 0.97) })
+      page.drawText('DESCRIÇÃO', { x: 52, y, size: 8, font: bold, color: accent })
+      drawRight('QTD.', 372, y, 8, bold, accent)
+      drawRight('VALOR UNIT.', 455, y, 8, bold, accent)
+      drawRight('TOTAL', 543, y, 8, bold, accent)
       y -= 25
     }
     const quantity = Math.max(0, Number(item.quantity) || 0)
     const unit = Math.max(0, Number(item.unit_price_cents) || 0)
-    page.drawText(safeText(item.description, 52), { x: 44, y, size: 9, font: regular, color: accent })
-    page.drawText(String(quantity), { x: 365, y, size: 9, font: regular, color: accent })
-    page.drawText(money(unit), { x: 416, y, size: 9, font: regular, color: accent })
-    page.drawText(money(unit * quantity), { x: 500, y, size: 9, font: regular, color: accent })
+    if (index % 2 === 1) page.drawRectangle({ x: 44, y: y - 8, width: 507, height: 21, color: rgb(0.98, 0.98, 0.99) })
+    page.drawText(safeText(item.description, 52), { x: 52, y, size: 9, font: regular, color: accent })
+    drawRight(String(quantity), 372, y, 9, regular, accent)
+    drawRight(money(unit), 455, y, 9, regular, accent)
+    drawRight(money(unit * quantity), 543, y, 9, regular, accent)
+    page.drawLine({ start: { x: 44, y: y - 9 }, end: { x: 551, y: y - 9 }, thickness: 0.35, color: secondary })
     y -= 24
   }
 
@@ -118,13 +125,13 @@ export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<U
   page.drawLine({ start: { x: 350, y }, end: { x: 551, y }, thickness: 1, color: line })
   y -= 22
   page.drawText('Subtotal', { x: 382, y, size: 9, font: regular, color: secondary })
-  page.drawText(money(Number(snapshot.subtotal_cents) || 0), { x: 480, y, size: 9, font: regular, color: accent })
+  drawRight(money(Number(snapshot.subtotal_cents) || 0), 551, y, 9, regular, accent)
   y -= 18
   page.drawText('Desconto', { x: 382, y, size: 9, font: regular, color: secondary })
-  page.drawText(money(Number(snapshot.discount_cents) || 0), { x: 480, y, size: 9, font: regular, color: accent })
+  drawRight(money(Number(snapshot.discount_cents) || 0), 551, y, 9, regular, accent)
   y -= 23
   page.drawText('TOTAL', { x: 382, y, size: 10, font: bold, color: accent })
-  page.drawText(money(Number(snapshot.total_cents) || 0), { x: 475, y, size: 12, font: bold, color: accent })
+  drawRight(money(Number(snapshot.total_cents) || 0), 551, y, 12, bold, accent)
 
   if (snapshot.due_date) {
     y -= 38
