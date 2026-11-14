@@ -162,8 +162,8 @@ function toolStatus(part: unknown): string | null {
     return value.state === 'output-available' ? 'Documentação consultada' : 'Consultando documentação da Codexa…'
   }
 
-  const isWrite = name === 'create_workspace_record' || name === 'update_workspace_record'
-  const label = name === 'create_workspace_record' ? 'Criando registro' : name === 'update_workspace_record' ? 'Atualizando registro' : 'Consultando registros'
+  const isWrite = name === 'create_workspace_record' || name === 'update_workspace_record' || name === 'create_commercial_document_draft'
+  const label = name === 'create_commercial_document_draft' ? 'Criando rascunho comercial' : name === 'create_workspace_record' ? 'Criando registro' : name === 'update_workspace_record' ? 'Atualizando registro' : 'Consultando registros'
   if (value.state === 'output-error') return `${label}: operação não concluída`
   if (value.state === 'output-available') {
     const output = typeof value.output === 'object' && value.output !== null ? value.output as { success?: unknown; message?: unknown } : null
