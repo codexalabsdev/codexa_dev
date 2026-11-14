@@ -42,7 +42,7 @@ export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<U
   const muted = rgb(0.37, 0.42, 0.49)
   const accent = documentColor(snapshot.issuer?.issuer_primary_color, '#17324D')
   const secondary = documentColor(snapshot.issuer?.issuer_secondary_color, '#0F766E')
-  const line = rgb(0.88, 0.91, 0.94)
+  const line = documentColor(snapshot.issuer?.issuer_primary_color, '#D1D9E2')
   let y = 790
 
   try {
@@ -59,7 +59,7 @@ export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<U
 
   page.drawLine({ start: { x: 44, y }, end: { x: 551, y }, thickness: 1, color: line })
   y -= 38
-  page.drawText(safeText(snapshot.title, 120), { x: 44, y, size: 20, font: bold, color: ink })
+  page.drawText(safeText(snapshot.title, 120), { x: 44, y, size: 20, font: bold, color: accent })
   y -= 22
   if (snapshot.description) {
     page.drawText(safeText(snapshot.description, 180), { x: 44, y, size: 10, font: regular, color: muted })
@@ -144,7 +144,8 @@ export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<U
   }
 
   for (const pdfPage of pages) {
-    pdfPage.drawRectangle({ x: 24, y: 24, width: 547, height: 794, borderColor: line, borderWidth: 1 })
+    pdfPage.drawRectangle({ x: 24, y: 24, width: 547, height: 794, borderColor: accent, borderWidth: 1.5 })
+    pdfPage.drawRectangle({ x: 30, y: 30, width: 535, height: 782, borderColor: line, borderWidth: 0.5 })
     pdfPage.drawLine({ start: { x: 24, y: 817 }, end: { x: 320, y: 817 }, thickness: 3, color: accent })
     pdfPage.drawLine({ start: { x: 320, y: 817 }, end: { x: 571, y: 817 }, thickness: 3, color: secondary })
     pdfPage.drawLine({ start: { x: 44, y: 48 }, end: { x: 551, y: 48 }, thickness: 1, color: line })

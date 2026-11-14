@@ -41,17 +41,18 @@ export function CommercialDocumentPreview({ document, issuer, clientName, projec
         <button type="button" onClick={onClose} aria-label="Fechar prévia" className="grid size-9 shrink-0 place-items-center rounded-lg border border-white/10 text-slate-300 transition hover:bg-white/5"><X className="size-4" /></button>
       </header>
       <div className="overflow-y-auto bg-[#101522] p-3 sm:p-7">
-        <article className="mx-auto w-full max-w-[720px] overflow-hidden rounded-sm border bg-white text-slate-800 shadow-xl shadow-black/30 sm:min-h-[820px]" style={{ borderColor: primaryColor, '--issuer-primary': primaryColor, '--issuer-secondary': secondaryColor } as import('react').CSSProperties}>
-          <div className="h-1.5" style={{ background: `linear-gradient(90deg, ${primaryColor}, ${secondaryColor})` }} />
-          <div className="p-5 sm:p-10">
-            <header className="flex flex-wrap items-start justify-between gap-5 border-b border-slate-200 pb-6">
+        <article className="relative mx-auto w-full max-w-[720px] overflow-hidden rounded-[3px] border-2 bg-white text-slate-800 shadow-2xl shadow-black/35 sm:min-h-[820px]" style={{ borderColor: primaryColor, '--issuer-primary': primaryColor, '--issuer-secondary': secondaryColor } as import('react').CSSProperties}>
+          <div className="pointer-events-none absolute inset-[7px] border" style={{ borderColor: `${primaryColor}35` }} />
+          <div className="relative h-2" style={{ background: `linear-gradient(90deg, ${primaryColor}, ${secondaryColor})` }} />
+          <div className="relative p-7 sm:p-11">
+            <header className="flex flex-wrap items-start justify-between gap-5 border-b-2 pb-6" style={{ borderColor: `${primaryColor}35` }}>
               <div className="flex min-w-0 items-center gap-4">
                 <div className="grid size-[92px] shrink-0 place-items-center rounded-xl bg-[#10172b] p-2"><img src="/codexa-logo.png" alt="Codexa" className="max-h-full max-w-full object-contain" /></div>
                 <div><p className="text-[10px] font-bold uppercase tracking-[.2em] text-[var(--issuer-primary)]">{issuer?.issuer_name || 'Codexa'}</p><p className="mt-1 max-w-[250px] text-xs leading-5 text-slate-500">{[issuer?.issuer_tax_id, issuer?.issuer_email, issuer?.issuer_phone, issuer?.issuer_address].filter(Boolean).join(' · ') || 'Dados do emissor serão exibidos neste documento'}</p></div>
               </div>
               <div className="text-left sm:text-right"><span className="inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold" style={{ color: primaryColor, borderColor: `${primaryColor}40`, backgroundColor: `${primaryColor}12` }}>{statuses[document.status] ?? document.status}</span><p className="mt-3 text-xs font-medium uppercase tracking-wider text-slate-400">{labels[document.document_type] ?? 'Documento comercial'}</p><p className="mt-1 text-xs text-slate-500">{document.document_number || 'Número após emissão'}</p><p className="mt-1 text-xs text-slate-500">{date(document.created_at)}</p></div>
             </header>
-            <section className="mt-7 border-l-[3px] border-[var(--issuer-primary)] pl-4"><h3 className="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{document.title}</h3>{document.description && <p className="mt-2 text-sm leading-6 text-slate-600">{document.description}</p>}</section>
+            <section className="mt-7 border-l-[3px] border-[var(--issuer-primary)] pl-4"><h3 className="text-xl font-semibold tracking-tight text-[var(--issuer-primary)] sm:text-2xl">{document.title}</h3>{document.description && <p className="mt-2 text-sm leading-6 text-slate-600">{document.description}</p>}</section>
             <section className="mt-7 grid gap-3 sm:grid-cols-2">
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[var(--issuer-primary)]">Destinatário</p><p className="mt-2 text-sm font-semibold text-slate-800">{clientName || 'Cliente não informado'}</p></div>
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[var(--issuer-primary)]">Projeto</p><p className="mt-2 text-sm font-semibold text-slate-800">{projectName || 'Sem projeto vinculado'}</p></div>
