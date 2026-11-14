@@ -1,0 +1,160 @@
+import 'server-only'
+
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
+
+type LineItem = { description?: string; quantity?: number; unit_price_cents?: number }
+type Snapshot = {
+  document_number?: string
+  title?: string
+  description?: string
+  document_type?: string
+  line_items?: LineItem[]
+  subtotal_cents?: number
+  discount_cents?: number
+  total_cents?: number
+  due_date?: string | null
+  notes?: string
+  issued_at?: string
+  issuer?: { name?: string; tax_id?: string; email?: string; phone?: string; address?: string; issuer_primary_color?: string; issuer_secondary_color?: string }
+  client?: { name?: string; legal_name?: string; email?: string; phone?: string }
+  project?: { name?: string }
+}
+
+const money = (cents: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100)
+const safeText = (value: unknown, max = 160) => String(value ?? '').replace(/[\r\n\t]+/g, ' ').replace(/[^\x20-\xFF]/g, ' ').slice(0, max)
+const documentColor = (value: string | undefined, fallback: string) => {
+  const hex = /^#[0-9A-Fa-f]{6}$/.test(value ?? '') ? value!.slice(1) : fallback.slice(1)
+  return rgb(Number.parseInt(hex.slice(0, 2), 16) / 255, Number.parseInt(hex.slice(2, 4), 16) / 255, Number.parseInt(hex.slice(4, 6), 16) / 255)
+}
+
+export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<Uint8Array> {
+  const pdf = await PDFDocument.create()
+  pdf.setTitle(safeText(snapshot.title, 160))
+  pdf.setSubject(`Documento comercial ${safeText(snapshot.document_number, 80)}`)
+  pdf.setCreator('Codexa Workspace')
+  let page = pdf.addPage([595.28, 841.89])
+  const pages = [page]
+  const regular = await pdf.embedFont(StandardFonts.Helvetica)
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold)
+  const accent = documentColor(snapshot.issuer?.issuer_primary_color, '#17324D')
+  const secondary = documentColor(snapshot.issuer?.issuer_secondary_color, '#0F766E')
+  const line = accent
+  let y = 790
+  const drawRight = (text: string, rightX: number, baseline: number, size: number, font: typeof regular, color: typeof accent) => {
+    page.drawText(text, { x: rightX - font.widthOfTextAtSize(text, size), y: baseline, size, font, color })
+  }
+
+  try {
+    const response = await fetch('https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Logotipo_futurista_CODEXA_em_neon__1_-removebg-preview-dAgeswjimSLf0J7eFIogrynbTr4DX2.png', { cache: 'force-cache' })
+    if (!response.ok) throw new Error('Não foi possível carregar o logotipo CODEXA.')
+    const image = await pdf.embedPng(new Uint8Array(await response.arrayBuffer()))
+    const size = image.scale(Math.min(132 / image.width, 70 / image.height))
+    page.drawRectangle({ x: 44, y: y - size.height + 5, width: size.width, height: size.height, color: rgb(0.03, 0.04, 0.06) })
+    page.drawImage(image, { x: 44, y: y - size.height + 5, width: size.width, height: size.height })
+  } catch {
+    page.drawText('CODEXA', { x: 44, y: y - 24, size: 18, font: bold, color: accent })
+  }
+  page.drawText(safeText(snapshot.document_number, 80), { x: 360, y: y - 2, size: 11, font: bold, color: accent })
+  page.drawText(new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(new Date(snapshot.issued_at ?? Date.now())), { x: 360, y: y - 20, size: 9, font: regular, color: secondary })
+  y -= 66
+
+  page.drawLine({ start: { x: 44, y }, end: { x: 551, y }, thickness: 1, color: line })
+  y -= 38
+  page.drawText(safeText(snapshot.title, 120), { x: 44, y, size: 20, font: bold, color: accent })
+  y -= 22
+  if (snapshot.description) {
+    page.drawText(safeText(snapshot.description, 180), { x: 44, y, size: 10, font: regular, color: secondary })
+    y -= 30
+  } else y -= 16
+
+  const issuer = snapshot.issuer ?? {}
+  const client = snapshot.client ?? {}
+  page.drawText('EMITIDO POR', { x: 44, y, size: 8, font: bold, color: secondary })
+  page.drawText(safeText(issuer.name || 'Codexa', 100), { x: 44, y: y - 17, size: 10, font: bold, color: accent })
+  page.drawText(safeText(issuer.tax_id, 100), { x: 44, y: y - 32, size: 9, font: regular, color: secondary })
+  page.drawText(safeText(issuer.email || issuer.phone || issuer.address, 100), { x: 44, y: y - 46, size: 9, font: regular, color: secondary })
+  page.drawText('DESTINATÁRIO', { x: 305, y, size: 8, font: bold, color: secondary })
+  page.drawText(safeText(client.name || client.legal_name || 'Não informado', 100), { x: 305, y: y - 17, size: 10, font: bold, color: accent })
+  page.drawText(safeText(client.email || client.phone, 100), { x: 305, y: y - 32, size: 9, font: regular, color: secondary })
+  if (snapshot.project?.name) page.drawText(`Projeto: ${safeText(snapshot.project.name, 80)}`, { x: 305, y: y - 46, size: 9, font: regular, color: secondary })
+  y -= 82
+
+  page.drawLine({ start: { x: 44, y }, end: { x: 551, y }, thickness: 1, color: line })
+  y -= 22
+  page.drawRectangle({ x: 44, y: y - 8, width: 507, height: 25, color: rgb(0.95, 0.96, 0.97) })
+  page.drawText('DESCRIÇÃO', { x: 52, y, size: 8, font: bold, color: accent })
+  drawRight('QTD.', 372, y, 8, bold, accent)
+  drawRight('VALOR UNIT.', 455, y, 8, bold, accent)
+  drawRight('TOTAL', 543, y, 8, bold, accent)
+  y -= 15
+  page.drawLine({ start: { x: 44, y }, end: { x: 551, y }, thickness: 1, color: line })
+  y -= 22
+
+  for (const [index, item] of (snapshot.line_items ?? []).slice(0, 30).entries()) {
+    if (y < 160) {
+      page = pdf.addPage([595.28, 841.89])
+      pages.push(page)
+      y = 790
+      page.drawText(`Continuação · ${safeText(snapshot.title, 80)}`, { x: 44, y, size: 12, font: bold, color: accent })
+      page.drawText(safeText(snapshot.document_number, 80), { x: 400, y, size: 9, font: bold, color: accent })
+      y -= 36
+      page.drawRectangle({ x: 44, y: y - 8, width: 507, height: 25, color: rgb(0.95, 0.96, 0.97) })
+      page.drawText('DESCRIÇÃO', { x: 52, y, size: 8, font: bold, color: accent })
+      drawRight('QTD.', 372, y, 8, bold, accent)
+      drawRight('VALOR UNIT.', 455, y, 8, bold, accent)
+      drawRight('TOTAL', 543, y, 8, bold, accent)
+      y -= 25
+    }
+    const quantity = Math.max(0, Number(item.quantity) || 0)
+    const unit = Math.max(0, Number(item.unit_price_cents) || 0)
+    if (index % 2 === 1) page.drawRectangle({ x: 44, y: y - 8, width: 507, height: 21, color: rgb(0.98, 0.98, 0.99) })
+    page.drawText(safeText(item.description, 52), { x: 52, y, size: 9, font: regular, color: accent })
+    drawRight(String(quantity), 372, y, 9, regular, accent)
+    drawRight(money(unit), 455, y, 9, regular, accent)
+    drawRight(money(unit * quantity), 543, y, 9, regular, accent)
+    page.drawLine({ start: { x: 44, y: y - 9 }, end: { x: 551, y: y - 9 }, thickness: 0.35, color: secondary })
+    y -= 24
+  }
+
+  if (y < 185) {
+    page = pdf.addPage([595.28, 841.89])
+    pages.push(page)
+    y = 760
+  }
+  y -= 6
+  page.drawLine({ start: { x: 350, y }, end: { x: 551, y }, thickness: 1, color: line })
+  y -= 22
+  page.drawText('Subtotal', { x: 382, y, size: 9, font: regular, color: secondary })
+  drawRight(money(Number(snapshot.subtotal_cents) || 0), 551, y, 9, regular, accent)
+  y -= 18
+  page.drawText('Desconto', { x: 382, y, size: 9, font: regular, color: secondary })
+  drawRight(money(Number(snapshot.discount_cents) || 0), 551, y, 9, regular, accent)
+  y -= 23
+  page.drawText('TOTAL', { x: 382, y, size: 10, font: bold, color: accent })
+  drawRight(money(Number(snapshot.total_cents) || 0), 551, y, 12, bold, accent)
+
+  if (snapshot.due_date) {
+    y -= 38
+    page.drawText(`Vencimento: ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(`${snapshot.due_date}T12:00:00Z`))}`, { x: 44, y, size: 9, font: bold, color: accent })
+  }
+  if (snapshot.notes) {
+    if (y < 90) {
+      page = pdf.addPage([595.28, 841.89])
+      pages.push(page)
+      y = 760
+    }
+    y -= 32
+    page.drawText('OBSERVAÇÕES', { x: 44, y, size: 8, font: bold, color: secondary })
+    page.drawText(safeText(snapshot.notes, 220), { x: 44, y: y - 16, size: 9, font: regular, color: accent })
+  }
+
+  for (const pdfPage of pages) {
+    pdfPage.drawRectangle({ x: 24, y: 24, width: 547, height: 794, borderColor: accent, borderWidth: 1.5 })
+    pdfPage.drawRectangle({ x: 30, y: 30, width: 535, height: 782, borderColor: line, borderWidth: 0.5 })
+    pdfPage.drawLine({ start: { x: 24, y: 817 }, end: { x: 320, y: 817 }, thickness: 3, color: accent })
+    pdfPage.drawLine({ start: { x: 320, y: 817 }, end: { x: 571, y: 817 }, thickness: 3, color: secondary })
+    pdfPage.drawLine({ start: { x: 44, y: 48 }, end: { x: 551, y: 48 }, thickness: 1, color: line })
+    pdfPage.drawText('Documento comercial não fiscal · Gerado pela Central de Documentos Codexa', { x: 44, y: 32, size: 8, font: regular, color: secondary })
+  }
+  return pdf.save()
+}
