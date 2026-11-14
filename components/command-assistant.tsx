@@ -154,9 +154,23 @@ function formatRecordingTime(totalSeconds: number): string {
 
 function toolStatus(part: unknown): string | null {
   if (typeof part !== 'object' || part === null) return null
-  const value = part as { type?: unknown; state?: unknown }
+  const value = part as { type?: unknown; state?: unknown; output?: unknown }
   if (typeof value.type !== 'string' || !value.type.startsWith('tool_') && !value.type.startsWith('tool-')) return null
-  return value.state === 'output-available' ? 'Documentação consultada' : 'Consultando documentação da Codexa…'
+
+  const name = value.type.replace(/^tool[_-]/, '')
+  if (name === 'search_codexa_knowledge') {
+    return value.state === 'output-available' ? 'Documentação consultada' : 'Consultando documentação da Codexa…'
+  }
+
+  const isWrite = name === 'create_workspace_record' || name === 'update_workspace_record'
+  const label = name === 'create_workspace_record' ? 'Criando registro' : name === 'update_workspace_record' ? 'Atualizando registro' : 'Consultando registros'
+  if (value.state === 'output-error') return `${label}: operação não concluída`
+  if (value.state === 'output-available') {
+    const output = typeof value.output === 'object' && value.output !== null ? value.output as { success?: unknown; message?: unknown } : null
+    if (typeof output?.message === 'string') return output.message
+    return output?.success === false ? `${label}: operação não concluída` : isWrite ? `${label}: concluída` : 'Consulta de registros concluída'
+  }
+  return `${label}…`
 }
 
 function CodexaNeonLogo({ size = 'compact' }: { size?: 'compact' | 'large' }) {
