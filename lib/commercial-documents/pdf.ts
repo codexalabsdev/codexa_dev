@@ -36,7 +36,8 @@ export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<U
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold)
   const ink = rgb(0.09, 0.13, 0.19)
   const muted = rgb(0.37, 0.42, 0.49)
-  const accent = rgb(0.05, 0.55, 0.67)
+  const accent = rgb(0.24, 0.32, 0.95)
+  const violet = rgb(0.38, 0.16, 0.91)
   const line = rgb(0.88, 0.91, 0.94)
   let y = 790
 
@@ -139,6 +140,9 @@ export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<U
   }
 
   for (const pdfPage of pages) {
+    pdfPage.drawRectangle({ x: 24, y: 24, width: 547, height: 794, borderColor: line, borderWidth: 1 })
+    pdfPage.drawLine({ start: { x: 24, y: 817 }, end: { x: 320, y: 817 }, thickness: 3, color: accent })
+    pdfPage.drawLine({ start: { x: 320, y: 817 }, end: { x: 571, y: 817 }, thickness: 3, color: violet })
     pdfPage.drawLine({ start: { x: 44, y: 48 }, end: { x: 551, y: 48 }, thickness: 1, color: line })
     pdfPage.drawText('Documento comercial não fiscal · Gerado pela Central de Documentos Codexa', { x: 44, y: 32, size: 8, font: regular, color: muted })
   }
