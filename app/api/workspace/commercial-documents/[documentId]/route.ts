@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createCommercialDocumentPdf } from '@/lib/commercial-documents/pdf'
 import { AdminApiError } from '@/lib/supabase/server-client'
+import { normalizeWorkspaceRoleName } from '@/lib/workspace-access'
 import { requireWorkspacePermission } from '@/lib/supabase/workspace-auth'
 
 export const runtime = 'nodejs'
@@ -33,16 +34,31 @@ export async function PATCH(request: Request, context: Context) {
 export async function DELETE(_request: Request, context: Context) {
   try {
     const actor = await requireWorkspacePermission('documents', 'delete')
+    if (normalizeWorkspaceRoleName(actor.roleName) !== 'admin') {
+      return NextResponse.json({ error: 'Somente administradores podem excluir documentos.' }, { status: 403 })
+    }
     const { documentId } = await context.params
     if (!uuidPattern.test(documentId)) return NextResponse.json({ error: 'Documento inválido.' }, { status: 400 })
-    const { data: current, error: readError } = await actor.supabase.from('workspace_commercial_documents').select('id,status,deleted_at').eq('id', documentId).maybeSingle()
-    if (readError || !current || current.deleted_at) return NextResponse.json({ error: 'Documento não encontrado.' }, { status: 404 })
-    if (!['draft', 'review'].includes(current.status)) return NextResponse.json({ error: 'Somente rascunhos podem ser removidos. Documentos emitidos permanecem no histórico.' }, { status: 409 })
-    const deletedAt = new Date().toISOString()
-    const { error } = await actor.supabase.from('workspace_commercial_documents').update({ deleted_at: deletedAt, updated_by: actor.actorId, updated_at: deletedAt }).eq('id', documentId).is('deleted_at', null)
-    if (error) throw new AdminApiError('Não foi possível remover o rascunho.', 503)
-    await actor.supabase.from('workspace_document_events').insert({ document_id: documentId, actor_id: actor.actorId, event_type: 'deleted', details: {} })
-    return NextResponse.json({ ok: true })
+    const { data, error } = await actor.supabase.rpc('archive_and_delete_workspace_commercial_document', {
+      p_document_id: documentId,
+      p_actor_id: actor.actorId,
+    })
+    if (error) {
+      if (error.code === 'P0002') return NextResponse.json({ error: 'Documento não encontrado.' }, { status: 404 })
+      if (error.code === '42501') return NextResponse.json({ error: 'Somente administradores podem excluir documentos.' }, { status: 403 })
+      console.error('Commercial document archival failed:', error)
+      throw new AdminApiError('A exclusão segura não está disponível. Aplique o SQL de arquivo histórico no banco.', 503)
+    }
+    const archived = data as { pdf_storage_path?: string | null } | null
+    let warning: string | undefined
+    if (archived?.pdf_storage_path) {
+      const { error: storageError } = await actor.supabase.storage.from('private-documents').remove([archived.pdf_storage_path])
+      if (storageError) {
+        console.error('Archived commercial document PDF cleanup failed:', storageError)
+        warning = 'O documento foi excluído e seu histórico preservado, mas o arquivo PDF privado não pôde ser removido.'
+      }
+    }
+    return NextResponse.json({ ok: true, warning })
   } catch (error) { return fail(error) }
 }
 
