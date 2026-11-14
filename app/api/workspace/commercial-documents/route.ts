@@ -43,7 +43,7 @@ export async function GET() {
       .order('created_at', { ascending: false })
       .limit(200)
     if (error) throw new AdminApiError('A estrutura comercial ainda não está disponível. Aplique a migration pendente da Central de Documentos.', 503)
-    const { data: settings, error: settingsError } = await actor.supabase.from('workspace_document_settings').select('issuer_name,issuer_tax_id,issuer_email,issuer_phone,issuer_address,updated_at').eq('id', true).maybeSingle()
+    const { data: settings, error: settingsError } = await actor.supabase.from('workspace_document_settings').select('issuer_name,issuer_tax_id,issuer_email,issuer_phone,issuer_address,issuer_primary_color,issuer_secondary_color,updated_at').eq('id', true).maybeSingle()
     if (settingsError && settingsError.code !== 'PGRST116') throw new AdminApiError('Não foi possível carregar as configurações do emissor.', 503)
     const rows = data ?? []
     const documentIds = rows.map((row) => row.id)

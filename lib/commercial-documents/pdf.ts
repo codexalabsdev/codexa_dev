@@ -17,13 +17,17 @@ type Snapshot = {
   due_date?: string | null
   notes?: string
   issued_at?: string
-  issuer?: { name?: string; tax_id?: string; email?: string; phone?: string; address?: string }
+  issuer?: { name?: string; tax_id?: string; email?: string; phone?: string; address?: string; issuer_primary_color?: string; issuer_secondary_color?: string }
   client?: { name?: string; legal_name?: string; email?: string; phone?: string }
   project?: { name?: string }
 }
 
 const money = (cents: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100)
 const safeText = (value: unknown, max = 160) => String(value ?? '').replace(/[\r\n\t]+/g, ' ').replace(/[^\x20-\xFF]/g, ' ').slice(0, max)
+const documentColor = (value: string | undefined, fallback: string) => {
+  const hex = /^#[0-9A-Fa-f]{6}$/.test(value ?? '') ? value!.slice(1) : fallback.slice(1)
+  return rgb(Number.parseInt(hex.slice(0, 2), 16) / 255, Number.parseInt(hex.slice(2, 4), 16) / 255, Number.parseInt(hex.slice(4, 6), 16) / 255)
+}
 
 export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<Uint8Array> {
   const pdf = await PDFDocument.create()
@@ -36,8 +40,8 @@ export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<U
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold)
   const ink = rgb(0.09, 0.13, 0.19)
   const muted = rgb(0.37, 0.42, 0.49)
-  const accent = rgb(0.24, 0.32, 0.95)
-  const violet = rgb(0.38, 0.16, 0.91)
+  const accent = documentColor(snapshot.issuer?.issuer_primary_color, '#17324D')
+  const secondary = documentColor(snapshot.issuer?.issuer_secondary_color, '#0F766E')
   const line = rgb(0.88, 0.91, 0.94)
   let y = 790
 
@@ -142,7 +146,7 @@ export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<U
   for (const pdfPage of pages) {
     pdfPage.drawRectangle({ x: 24, y: 24, width: 547, height: 794, borderColor: line, borderWidth: 1 })
     pdfPage.drawLine({ start: { x: 24, y: 817 }, end: { x: 320, y: 817 }, thickness: 3, color: accent })
-    pdfPage.drawLine({ start: { x: 320, y: 817 }, end: { x: 571, y: 817 }, thickness: 3, color: violet })
+    pdfPage.drawLine({ start: { x: 320, y: 817 }, end: { x: 571, y: 817 }, thickness: 3, color: secondary })
     pdfPage.drawLine({ start: { x: 44, y: 48 }, end: { x: 551, y: 48 }, thickness: 1, color: line })
     pdfPage.drawText('Documento comercial não fiscal · Gerado pela Central de Documentos Codexa', { x: 44, y: 32, size: 8, font: regular, color: muted })
   }

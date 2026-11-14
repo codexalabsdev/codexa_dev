@@ -72,7 +72,11 @@ export async function POST(request: Request, context: Context) {
     if (!snapshot) throw new AdminApiError('O documento foi emitido, mas não foi possível carregar o conteúdo imutável.', 503)
     let pdfWarning: string | undefined
     try {
-      const bytes = await createCommercialDocumentPdf(snapshot)
+      const { data: branding, error: brandingError } = await actor.supabase.from('workspace_document_settings').select('issuer_primary_color,issuer_secondary_color').eq('id', true).maybeSingle()
+      if (brandingError) throw brandingError
+      const issuer = snapshot.issuer && typeof snapshot.issuer === 'object' ? snapshot.issuer as Record<string, unknown> : {}
+      const brandedSnapshot = { ...snapshot, issuer: { ...issuer, issuer_primary_color: branding?.issuer_primary_color, issuer_secondary_color: branding?.issuer_secondary_color } }
+      const bytes = await createCommercialDocumentPdf(brandedSnapshot)
       const path = `commercial-documents/${documentId}/${String(document.document_number).replace(/[^A-Za-z0-9-]/g, '')}.pdf`
       const upload = await actor.supabase.storage.from('private-documents').upload(path, bytes, { contentType: 'application/pdf', upsert: true })
       if (upload.error) throw upload.error
