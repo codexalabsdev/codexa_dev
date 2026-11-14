@@ -296,5 +296,48 @@ export function createOperationalAssistantTools(requestId: string) {
         })
       },
     }),
+    create_commercial_document_draft: tool({
+      description: 'Cria somente um rascunho de recibo, orçamento, cobrança ou ordem de serviço. Nunca emite o documento nem registra pagamento. A emissão exige confirmação explícita na Central de Documentos.',
+      inputSchema: jsonSchema<{ documentType: 'receipt' | 'quote' | 'billing_notice' | 'service_order'; title: string; description?: string; items: Array<{ description: string; quantity: number; unitPriceCents: number }> }>({
+        type: 'object',
+        properties: {
+          documentType: { type: 'string', enum: ['receipt', 'quote', 'billing_notice', 'service_order'] },
+          title: { type: 'string', minLength: 2, maxLength: 160 },
+          description: { type: 'string', maxLength: 2000 },
+          items: { type: 'array', minItems: 1, maxItems: 30, items: { type: 'object', properties: { description: { type: 'string', minLength: 2, maxLength: 200 }, quantity: { type: 'integer', minimum: 1, maximum: 10000 }, unitPriceCents: { type: 'integer', minimum: 0, maximum: 100000000 } }, required: ['description', 'quantity', 'unitPriceCents'], additionalProperties: false } },
+        },
+        required: ['documentType', 'title', 'items'], additionalProperties: false,
+      }),
+      execute: async ({ documentType, title, description = '', items }) => {
+        toolCalls += 1
+        if (toolCalls > 8) return { success: false, message: 'Esta resposta atingiu o limite de consultas.' }
+        if (writeCalls >= 1) return { success: false, message: 'Esta resposta já executou uma alteração. Envie uma nova mensagem para outra alteração.' }
+        const validTypes = ['receipt', 'quote', 'billing_notice', 'service_order']
+        if (!validTypes.includes(documentType) || typeof title !== 'string' || title.trim().length < 2 || title.length > 160 || !Array.isArray(items) || items.length < 1 || items.length > 30) return { success: false, message: 'Os dados do rascunho são inválidos.' }
+        let subtotal = 0
+        const lineItems: { description: string; quantity: number; unit_price_cents: number }[] = []
+        for (const item of items) {
+          if (typeof item.description !== 'string' || item.description.trim().length < 2 || item.description.length > 200 || !Number.isSafeInteger(item.quantity) || item.quantity < 1 || item.quantity > 10000 || !Number.isSafeInteger(item.unitPriceCents) || item.unitPriceCents < 0 || item.unitPriceCents > 100_000_000) return { success: false, message: 'Revise a descrição, quantidade e valores informados.' }
+          const lineTotal = item.quantity * item.unitPriceCents
+          if (!Number.isSafeInteger(lineTotal) || !Number.isSafeInteger(subtotal + lineTotal)) return { success: false, message: 'O valor total excede o limite permitido.' }
+          subtotal += lineTotal
+          lineItems.push({ description: item.description.trim(), quantity: item.quantity, unit_price_cents: item.unitPriceCents })
+        }
+        if (description.length > 2000) return { success: false, message: 'A descrição excede o limite permitido.' }
+        try {
+          const actor = await getWorkspaceActor()
+          const permissions = await getWorkspacePermissions(actor)
+          if (!permissions.has('*') && !permissions.has('documents:create')) return { success: false, message: 'Você não tem permissão para criar rascunhos de documentos.' }
+          writeCalls += 1
+          const { data, error } = await actor.supabase.from('workspace_commercial_documents').insert({ document_type: documentType, title: title.trim(), description: description.trim(), line_items: lineItems, subtotal_cents: subtotal, discount_cents: 0, total_cents: subtotal, status: 'draft', notes: '', created_by: actor.actorId, updated_by: actor.actorId }).select('id,title,document_type,total_cents').single()
+          if (error || !data) throw new Error(error?.message ?? 'No document returned')
+          await actor.supabase.from('workspace_document_events').insert({ document_id: data.id, actor_id: actor.actorId, event_type: 'created', details: { document_type: documentType, source: 'assistant' } })
+          return { success: true, message: `Rascunho “${data.title}” criado. Ele ainda não foi emitido; revise e confirme a emissão na Central de Documentos.`, recordId: data.id, recordName: data.title }
+        } catch (error) {
+          console.warn('[Code-X] commercial_document_draft_failed', { requestId, errorName: error instanceof Error ? error.name : 'UnknownError' })
+          return { success: false, message: 'Não foi possível salvar o rascunho. Confira as permissões e se a migration da Central de Documentos está aplicada.' }
+        }
+      },
+    }),
   }
 }

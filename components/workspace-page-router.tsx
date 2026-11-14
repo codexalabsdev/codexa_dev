@@ -14,7 +14,7 @@ import { ReportsWorkspace } from '@/components/reports-workspace'
 import { RoleManagementWorkspace } from '@/components/role-management-workspace'
 import { ActivityHistoryWorkspace } from '@/components/activity-history-workspace'
 import { PlansWorkspace } from '@/components/plans-workspace'
-import { DocumentsWorkspace } from '@/components/documents-workspace'
+import { DocumentsModuleWorkspace } from '@/components/documents-module-workspace'
 import { XpSettingsWorkspace } from '@/components/xp-settings-workspace'
 
 import { workspaceLabel } from '@/lib/workspace-modules'
@@ -43,7 +43,7 @@ export function WorkspacePageRouter({ module, permissions, profileName }: { modu
   if (module === 'transacoes' || module === 'categorias-financeiras') return <FinanceWorkspace initialTab="overview" permissions={permissions} />
   if (module === 'meu-perfil') return <GamifiedProfileWorkspace initialName={profileName} />
   if (module === 'emblemas') return <BadgeManagementWorkspace />
-  if (module === 'documentos') return <DocumentsWorkspace />
+  if (module === 'documentos') return <DocumentsModuleWorkspace permissions={permissions} />
   if (module === 'configuracao-xp') return <XpSettingsWorkspace />
   if (module === 'meu-historico') return <ActivityHistoryWorkspace permissions={permissions} mode="personal" />
   if (module === 'auditoria') return <ActivityHistoryWorkspace permissions={permissions} mode="audit" />
