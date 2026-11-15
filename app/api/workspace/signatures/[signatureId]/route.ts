@@ -37,10 +37,11 @@ export async function GET(_request: Request, context: RouteContext) {
       ? await actor.supabase.from('team_members').select('user_id,full_name').in('user_id', actorIds)
       : { data: [], error: null }
     if (teamActorsError) throw new AdminApiError('Não foi possível identificar os responsáveis pelas evidências.', 503)
+    const signedFileDeleted = (events ?? []).some((event) => event.event_data?.action === 'signed_file_deleted')
     const original = await actor.supabase.storage.from(bucket).createSignedUrl(process.original_storage_path, 300)
-    const final = process.final_storage_path ? await actor.supabase.storage.from(bucket).createSignedUrl(process.final_storage_path, 300) : null
-    if (original.error || final?.error) throw new AdminApiError('Não foi possível gerar o acesso temporário aos arquivos.', 503)
-    return NextResponse.json({ process: { ...process, original_url: original.data.signedUrl, final_url: final?.data.signedUrl ?? null, signers: signers ?? [], fields: fields ?? [], events: (events ?? []).map((event) => ({ ...event, actor_name: teamActors?.find((teamActor) => teamActor.user_id === event.actor_id)?.full_name ?? null })) } }, { headers: { 'Cache-Control': 'private, no-store' } })
+    const final = process.final_storage_path && !signedFileDeleted ? await actor.supabase.storage.from(bucket).createSignedUrl(process.final_storage_path, 300) : null
+    if (original.error) throw new AdminApiError('Não foi possível gerar o acesso temporário ao PDF original.', 503)
+    return NextResponse.json({ process: { ...process, signed_file_deleted: signedFileDeleted, original_url: original.data.signedUrl, final_url: final?.data?.signedUrl ?? null, signers: signers ?? [], fields: fields ?? [], events: (events ?? []).map((event) => ({ ...event, actor_name: teamActors?.find((teamActor) => teamActor.user_id === event.actor_id)?.full_name ?? null })) } }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) { return fail(error) }
 }
 
@@ -54,6 +55,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     const y = Number(body.y_percent)
     const width = Number(body.width_percent)
     const height = Number(body.height_percent)
+    const fullName = typeof body.full_name === 'string' ? body.full_name.trim() : null
+    if (body.full_name !== undefined && (!fullName || fullName.length < 2 || fullName.length > 160)) {
+      return NextResponse.json({ error: 'O nome do signatário deve conter entre 2 e 160 caracteres.' }, { status: 400 })
+    }
     if (![pageNumber, x, y, width, height].every(Number.isFinite) || !Number.isInteger(pageNumber) || pageNumber < 1 || x < 0 || y < 0 || width < 1 || height < 1 || x + width > 100 || y + height > 100) {
       return NextResponse.json({ error: 'Posição ou dimensões inválidas.' }, { status: 400 })
     }
@@ -61,6 +66,15 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (processError) throw processError
     if (!process || process.status !== 'draft') return NextResponse.json({ error: 'Este processo não pode mais ser preparado.' }, { status: 409 })
     if (pageNumber > process.page_count) return NextResponse.json({ error: 'A página selecionada não existe no documento.' }, { status: 400 })
+    if (fullName) {
+      const { data: signer, error: signerError } = await actor.supabase.from('document_signers').select('id').eq('process_id', signatureId).eq('user_id', actor.actorId).eq('status', 'pending').maybeSingle()
+      if (signerError) throw signerError
+      if (!signer) return NextResponse.json({ error: 'O signatário não pode mais ser alterado.' }, { status: 409 })
+      const { error: nameError } = await actor.supabase.from('document_signers').update({ full_name: fullName }).eq('id', signer.id)
+      if (nameError) throw nameError
+      const { error: auditError } = await actor.supabase.from('document_signing_events').insert({ process_id: signatureId, signer_id: signer.id, actor_id: actor.actorId, event_type: 'prepared', event_data: { signer_name_updated: fullName }, ip_address: getClientAddress(request), user_agent: request.headers.get('user-agent')?.slice(0, 500) || null })
+      if (auditError) throw auditError
+    }
     const { error } = await actor.supabase.rpc('prepare_document_signing_field', {
       p_process_id: signatureId,
       p_actor_id: actor.actorId,
@@ -158,6 +172,30 @@ export async function DELETE(request: Request, context: RouteContext) {
   try {
     const actor = await requireWorkspacePermission('documents', 'signature_cancel')
     const { signatureId } = await context.params
+    const { data: process, error: processError } = await actor.supabase.from('document_signing_processes').select('id,status,final_storage_path,final_sha256').eq('id', signatureId).maybeSingle()
+    if (processError) throw processError
+    if (!process) return NextResponse.json({ error: 'Processo não encontrado.' }, { status: 404 })
+
+    if (process.status === 'signed') {
+      if (!process.final_storage_path) return NextResponse.json({ error: 'O PDF assinado já foi removido.' }, { status: 409 })
+      const { data: events, error: eventLookupError } = await actor.supabase.from('document_signing_events').select('event_data').eq('process_id', signatureId)
+      if (eventLookupError) throw eventLookupError
+      if ((events ?? []).some((event) => event.event_data?.action === 'signed_file_deleted')) return NextResponse.json({ error: 'O PDF assinado já foi removido.' }, { status: 409 })
+
+      const { error: removeError } = await actor.supabase.storage.from(bucket).remove([process.final_storage_path])
+      if (removeError) throw new AdminApiError('Não foi possível remover o PDF assinado.', 503)
+      const { error: auditError } = await actor.supabase.from('document_signing_events').insert({
+        process_id: signatureId,
+        actor_id: actor.actorId,
+        event_type: 'finalized',
+        event_data: { action: 'signed_file_deleted', final_sha256: process.final_sha256, history_preserved: true },
+        ip_address: getClientAddress(request),
+        user_agent: request.headers.get('user-agent')?.slice(0, 500) || null,
+      })
+      if (auditError) throw auditError
+      return NextResponse.json({ ok: true, signed_file_deleted: true })
+    }
+
     const { data: cancelled, error } = await actor.supabase.rpc('cancel_document_signing_process', { p_process_id: signatureId, p_actor_id: actor.actorId, p_ip_address: getClientAddress(request), p_user_agent: request.headers.get('user-agent')?.slice(0, 500) || null })
     if (error) throw error
     if (!cancelled) return NextResponse.json({ error: 'Este processo não pode ser cancelado.' }, { status: 409 })
