@@ -91,6 +91,7 @@ function getStatusOptions(item: Receivable | Payable) {
   const options = [
     { value: 'Pendente', label: 'Pendente' },
     { value: getSettlementStatus(item), label: getSettlementLabel(item) },
+    { value: 'Cancelado', label: 'Cancelada' },
   ]
   const currentStatus = item.status.trim()
   if (currentStatus && !options.some((option) => option.value.toLocaleLowerCase('pt-BR') === currentStatus.toLocaleLowerCase('pt-BR'))) {
@@ -718,6 +719,7 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
       ) : (
         <>
           <ListingControls total={tab === 'payable' ? filteredPayables.length : filteredReceivables.length} page={page} onPageChange={setPage} hasActiveFilters={Boolean(query)} onClear={() => { setQuery(''); setPage(0) }} />
+          <p className="border-b border-white/[0.06] px-5 py-2 text-[11px] text-slate-500">O status “Atrasada” é calculado automaticamente quando o vencimento passa sem a quitação total.</p>
           <div className="divide-y divide-white/[0.06]">
             {visibleFinanceRows.map((item) => (
               <div key={item.id} className="flex flex-col justify-between gap-3 px-5 py-4 sm:flex-row sm:items-center sm:gap-4">
