@@ -30,6 +30,16 @@ const contrastTextColor = (hex: string) => {
   const backgroundLuminance = luminance(hex)
   return 1.05 / (backgroundLuminance + 0.05) >= (backgroundLuminance + 0.05) / (luminance('#172033') + 0.05) ? '#FFFFFF' : '#172033'
 }
+const readableBrandColor = (hex: string) => {
+  const luminance = (value: string) => (value.match(/[A-Fa-f0-9]{2}/g) ?? []).map((channel) => Number.parseInt(channel, 16) / 255).map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4).reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index], 0)
+  let channels = (hex.match(/[A-Fa-f0-9]{2}/g) ?? []).map((channel) => Number.parseInt(channel, 16))
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const candidate = `#${channels.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`
+    if (1.05 / (luminance(candidate) + 0.05) >= 4.5) return candidate
+    channels = channels.map((channel) => Math.round(channel * 0.88))
+  }
+  return '#17324D'
+}
 
 export function CommercialDocumentPreview({ document, issuer, clientName, projectName, onClose }: {
   document: PreviewDocument
@@ -38,8 +48,8 @@ export function CommercialDocumentPreview({ document, issuer, clientName, projec
   projectName?: string
   onClose: () => void
 }) {
-  const primaryColor = /^#[0-9A-F]{6}$/i.test(issuer?.issuer_primary_color ?? '') ? issuer!.issuer_primary_color! : '#17324D'
-  const secondaryColor = /^#[0-9A-F]{6}$/i.test(issuer?.issuer_secondary_color ?? '') ? issuer!.issuer_secondary_color! : '#0F766E'
+  const primaryColor = readableBrandColor(/^#[0-9A-F]{6}$/i.test(issuer?.issuer_primary_color ?? '') ? issuer!.issuer_primary_color! : '#17324D')
+  const secondaryColor = readableBrandColor(/^#[0-9A-F]{6}$/i.test(issuer?.issuer_secondary_color ?? '') ? issuer!.issuer_secondary_color! : '#0F766E')
   const primaryTextColor = contrastTextColor(primaryColor)
   const primaryUiColor = liftBrandColor(primaryColor)
   const isReceipt = document.document_type === 'receipt'
@@ -56,8 +66,8 @@ export function CommercialDocumentPreview({ document, issuer, clientName, projec
         <article className="mx-auto min-h-[820px] w-full max-w-[720px] overflow-hidden border-2 bg-white text-slate-900 shadow-2xl shadow-black/35" style={{ borderColor: primaryColor }}>
           <div className="h-2" style={{ background: `linear-gradient(90deg, ${primaryColor}, ${secondaryColor})` }} />
           <div className="p-7 sm:p-11">
-            <header className={`flex flex-wrap items-center justify-between gap-5 ${isReceipt ? 'rounded-lg border-2 p-4' : 'border-b-2 pb-5'}`} style={{ borderColor: primaryColor }}>
-              <div className="flex min-w-0 items-center gap-4"><img src="/codexa-logo.png" alt="Codexa" className="h-14 w-28 object-contain" /><div className="min-w-0"><p className="text-sm font-bold" style={{ color: primaryColor }}>{issuer?.issuer_name || 'Codexa'}</p><p className="mt-1 max-w-[300px] text-[10px] leading-4 text-slate-600">{[issuer?.issuer_tax_id, issuer?.issuer_email, issuer?.issuer_phone, issuer?.issuer_address].filter(Boolean).join(' · ') || 'Dados do emissor'}</p></div></div>
+            <header className="flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5" style={{ borderColor: `${primaryColor}55`, backgroundColor: '#F8FAFC' }}>
+              <div className="flex min-w-0 items-center gap-4"><div className="grid size-[76px] shrink-0 place-items-center rounded-lg p-2" style={{ backgroundColor: '#10243A' }}><img src="/codexa-logo.png" alt="Codexa" className="size-full object-contain" /></div><div className="min-w-0"><p className="text-sm font-bold" style={{ color: primaryColor }}>{issuer?.issuer_name || 'Codexa'}</p><p className="mt-1 max-w-[300px] text-[10px] leading-4 text-slate-600">{[issuer?.issuer_tax_id, issuer?.issuer_email, issuer?.issuer_phone, issuer?.issuer_address].filter(Boolean).join(' · ') || 'Dados do emissor'}</p></div></div>
               <div className="text-right"><h3 className="text-lg font-extrabold tracking-tight sm:text-xl" style={{ color: primaryColor }}>{title}</h3><p className="mt-1 text-xs font-semibold">{document.document_number || 'Número após emissão'}</p><p className="mt-1 text-[10px] text-slate-500">Emissão: {issuedDate}</p><span className="mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold" style={{ color: primaryColor, borderColor: `${primaryColor}55`, backgroundColor: `${primaryColor}0D` }}>{statuses[document.status] ?? document.status}</span></div>
             </header>
 
@@ -65,7 +75,8 @@ export function CommercialDocumentPreview({ document, issuer, clientName, projec
               <section className="mt-8 rounded-lg border p-5" style={{ borderColor: `${secondaryColor}88` }}><p className="text-xs leading-6">Registro documental referente ao pagamento informado por <strong>{clientName || 'cliente não informado'}</strong> em favor de <span className="font-semibold">{issuer?.issuer_name || 'Codexa'}</span>:</p><h4 className="mt-4 text-2xl font-bold tabular-nums" style={{ color: primaryColor }}>{money(document.total_cents)}</h4><p className="mt-1 text-sm font-semibold">{document.title}</p>{document.description && <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-600">{document.description}</p>}<p className="mt-5 text-[10px] text-slate-600">Referência: {projectName || 'não vinculada a projeto'} · Data do registro: {issuedDate}</p></section>
               <LineItems document={document} color={primaryColor} />
               <div className="mt-12 grid grid-cols-2 gap-8 text-center text-[10px] text-slate-600"><div className="border-t pt-2" style={{ borderColor: secondaryColor }}>{issuer?.issuer_name || 'Codexa'}<br />Responsável pelo recebimento</div><div className="border-t pt-2" style={{ borderColor: secondaryColor }}>{clientName || 'Pagador'}<br />Pagador</div></div>
-              <p className="mt-5 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-[10px] text-amber-900">Este documento registra informações de pagamento, mas não altera o financeiro nem confirma a baixa do pagamento no sistema.</p>
+              {document.notes && <Note label="DADOS DO PAGAMENTO E OBSERVAÇÕES" text={document.notes} color={primaryColor} />}
+              <p className="mt-5 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-[10px] leading-5 text-amber-900">Este documento registra informações de pagamento, mas não altera o financeiro nem confirma a baixa do pagamento no sistema.</p>
             </>}
 
             {isQuote && <>
@@ -117,5 +128,5 @@ function OperationSection({ title, text, color }: { title: string; text: string;
   return <section className="mt-5"><h4 className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-white" style={{ backgroundColor: color }}>{title}</h4><p className="min-h-16 whitespace-pre-wrap border-x border-b px-3 py-4 text-xs leading-5 text-slate-700" style={{ borderColor: `${color}55` }}>{text}</p></section>
 }
 function LineItems({ document, color, showTotals = false }: { document: PreviewDocument; color: string; showTotals?: boolean }) {
-  return <section className="mt-6 overflow-hidden rounded border" style={{ borderColor: `${color}88` }}><div className="grid grid-cols-[minmax(0,1fr)_48px_90px_90px] gap-2 px-3 py-2 text-[9px] font-bold text-white sm:grid-cols-[minmax(0,1fr)_58px_105px_105px]" style={{ backgroundColor: color }}><span>DESCRIÇÃO</span><span className="text-right">QTD.</span><span className="text-right">UNITÁRIO</span><span className="text-right">TOTAL</span></div>{document.line_items.map((item, index) => <div key={`${item.description}-${index}`} className="grid grid-cols-[minmax(0,1fr)_48px_90px_90px] gap-2 border-b px-3 py-2.5 text-[10px] last:border-0 sm:grid-cols-[minmax(0,1fr)_58px_105px_105px] sm:text-xs" style={{ borderColor: `${color}33`, backgroundColor: index % 2 ? '#F8FAFC' : '#FFFFFF' }}><span className="break-words">{item.description}</span><span className="text-right tabular-nums">{item.quantity}</span><span className="text-right tabular-nums">{money(item.unit_price_cents)}</span><span className="text-right font-semibold tabular-nums">{money(item.unit_price_cents * item.quantity)}</span></div>)}{showTotals && <div className="grid gap-1 border-t p-3 text-xs" style={{ borderColor: color }}><div className="flex justify-between"><span>Subtotal</span><span>{money(document.subtotal_cents)}</span></div><div className="flex justify-between"><span>Desconto</span><span>− {money(document.discount_cents)}</span></div><div className="mt-1 flex justify-between border-t pt-2 text-sm font-bold" style={{ borderColor: `${color}55`, color }}><span>TOTAL</span><span>{money(document.total_cents)}</span></div></div>}</section>
+  return <section className="mt-6 overflow-hidden rounded border" style={{ borderColor: `${color}88` }}><div className="overflow-x-auto"><div className="min-w-[420px]"><div className="grid grid-cols-[minmax(0,1fr)_48px_90px_90px] gap-2 px-3 py-2 text-[9px] font-bold text-white sm:grid-cols-[minmax(0,1fr)_58px_105px_105px]" style={{ backgroundColor: color }}><span>DESCRIÇÃO</span><span className="text-right">QTD.</span><span className="text-right">UNITÁRIO</span><span className="text-right">TOTAL</span></div>{document.line_items.map((item, index) => <div key={`${item.description}-${index}`} className="grid grid-cols-[minmax(0,1fr)_48px_90px_90px] gap-2 border-b px-3 py-2.5 text-[10px] last:border-0 sm:grid-cols-[minmax(0,1fr)_58px_105px_105px] sm:text-xs" style={{ borderColor: `${color}33`, backgroundColor: index % 2 ? '#F8FAFC' : '#FFFFFF' }}><span className="break-words">{item.description}</span><span className="text-right tabular-nums">{item.quantity}</span><span className="text-right tabular-nums">{money(item.unit_price_cents)}</span><span className="text-right font-semibold tabular-nums">{money(item.unit_price_cents * item.quantity)}</span></div>)}{showTotals && <div className="grid gap-1 border-t p-3 text-xs" style={{ borderColor: color }}><div className="flex justify-between"><span>Subtotal</span><span>{money(document.subtotal_cents)}</span></div><div className="flex justify-between"><span>Desconto</span><span>− {money(document.discount_cents)}</span></div><div className="mt-1 flex justify-between border-t pt-2 text-sm font-bold" style={{ borderColor: `${color}55`, color }}><span>TOTAL</span><span>{money(document.total_cents)}</span></div></div>}</div></div></section>
 }

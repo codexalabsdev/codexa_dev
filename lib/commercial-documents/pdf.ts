@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { PDFDocument, StandardFonts, rgb, type PDFPage } from 'pdf-lib'
 
 type LineItem = { description?: string; quantity?: number; unit_price_cents?: number }
@@ -23,8 +25,14 @@ type Snapshot = {
 const money = (cents: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100)
 const safeText = (value: unknown, max = 160) => String(value ?? '').replace(/[\r\n\t]+/g, ' ').replace(/[^\x20-\xFF]/g, ' ').slice(0, max)
 const documentColor = (value: string | undefined, fallback: string) => {
-  const hex = /^#[0-9A-Fa-f]{6}$/.test(value ?? '') ? value!.slice(1) : fallback.slice(1)
-  return rgb(Number.parseInt(hex.slice(0, 2), 16) / 255, Number.parseInt(hex.slice(2, 4), 16) / 255, Number.parseInt(hex.slice(4, 6), 16) / 255)
+  const source = /^#[0-9A-Fa-f]{6}$/.test(value ?? '') ? value! : fallback
+  let channels = [1, 3, 5].map((offset) => Number.parseInt(source.slice(offset, offset + 2), 16))
+  const luminance = (values: number[]) => values.map((channel) => channel / 255).map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4).reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index], 0)
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    if (1.05 / (luminance(channels) + 0.05) >= 4.5) break
+    channels = channels.map((channel) => Math.round(channel * 0.88))
+  }
+  return rgb(channels[0] / 255, channels[1] / 255, channels[2] / 255)
 }
 const labels: Record<string, string> = { receipt: 'RECIBO', quote: 'ORCAMENTO', billing_notice: 'NOTA DE COBRANCA', service_order: 'ORDEM DE SERVICO' }
 
@@ -64,12 +72,31 @@ export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<U
     const content = safeText(value, max)
     if (content) page.drawText(content, { x, y, size, font, color })
   }
+  const paragraph = (value: unknown, x = 52, size = 9, font: typeof regular = regular, color = ink, maxWidth = 480, lineHeight = 13) => {
+    const words = String(value ?? '').replace(/[\r\t]+/g, ' ').split(/\s+/).filter(Boolean)
+    let current = ''
+    for (const word of words) {
+      const candidate = current ? `${current} ${word}` : word
+      if (current && font.widthOfTextAtSize(candidate, size) > maxWidth) {
+        if (y < 65) addPage(true)
+        page.drawText(safeText(current, 500), { x, y, size, font, color })
+        y -= lineHeight
+        current = word
+      } else current = candidate
+    }
+    if (current) {
+      if (y < 65) addPage(true)
+      page.drawText(safeText(current, 500), { x, y, size, font, color })
+      y -= lineHeight
+    }
+  }
   const right = (value: unknown, rightX: number, size = 9, font: typeof regular = regular, color = ink) => {
     const content = safeText(value, 40)
     page.drawText(content, { x: rightX - font.widthOfTextAtSize(content, size), y, size, font, color })
   }
   const line = (color = secondary) => page.drawLine({ start: { x: 44, y }, end: { x: 551, y }, thickness: 0.8, color })
   const section = (label: string) => {
+    if (y < 82) addPage(true)
     y -= 8
     page.drawRectangle({ x: 44, y: y - 8, width: 507, height: 22, color: primary })
     page.drawText(label, { x: 52, y, size: 8, font: bold, color: white })
@@ -111,13 +138,14 @@ export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<U
   pdf.setCreator('Codexa Workspace')
 
   try {
-    const response = await fetch('https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Logotipo_futurista_CODEXA_em_neon__1_-removebg-preview-dAgeswjimSLf0J7eFIogrynbTr4DX2.png', { cache: 'force-cache' })
-    if (!response.ok) throw new Error('Nao foi possivel carregar o logotipo CODEXA.')
-    const image = await pdf.embedPng(new Uint8Array(await response.arrayBuffer()))
-    const size = image.scale(Math.min(110 / image.width, 48 / image.height))
-    page.drawImage(image, { x: 44, y: y - size.height + 5, width: size.width, height: size.height })
+    const logoBytes = await readFile(join(process.cwd(), 'public', 'codexa-logo.png'))
+    const image = await pdf.embedPng(logoBytes)
+    const size = image.scale(Math.min(48 / image.width, 48 / image.height))
+    page.drawRectangle({ x: 40, y: y - 49, width: 58, height: 58, color: rgb(0.06, 0.14, 0.23) })
+    page.drawImage(image, { x: 45 + (48 - size.width) / 2, y: y - size.height + 5, width: size.width, height: size.height })
   } catch {
-    page.drawText('CODEXA', { x: 44, y: y - 24, size: 18, font: bold, color: primary })
+    page.drawRectangle({ x: 40, y: y - 49, width: 58, height: 58, color: primary })
+    page.drawText('CODEXA', { x: 44, y: y - 24, size: 9, font: bold, color: white })
   }
   page.drawText(safeText(issuer.name || 'Codexa', 80), { x: 170, y: y - 7, size: 11, font: bold, color: primary })
   page.drawText(safeText([issuer.tax_id, issuer.email, issuer.phone, issuer.address].filter(Boolean).join(' · '), 100), { x: 170, y: y - 23, size: 8, font: regular, color: secondary })
@@ -136,14 +164,16 @@ export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<U
     y -= 21
     text(`Referente a: ${snapshot.title}`, 44, 10, bold)
     y -= 19
-    if (snapshot.description) { text(snapshot.description, 44, 9, regular, ink, 150); y -= 18 }
+    if (snapshot.description) { paragraph(snapshot.description, 44, 9, regular, ink, 507, 13); y -= 8 }
     page.drawRectangle({ x: 44, y: y - 35, width: 507, height: 52, color: primary })
     page.drawText('VALOR INFORMADO', { x: 57, y: y + 1, size: 8, font: bold, color: white })
     page.drawText(money(Number(snapshot.total_cents) || 0), { x: 57, y: y - 22, size: 18, font: bold, color: white })
     y -= 75
     if (snapshot.project?.name) { text(`Projeto: ${snapshot.project.name}`, 44, 9); y -= 20 }
     text(`Data do registro: ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(new Date(snapshot.issued_at ?? Date.now()))}`, 44, 9)
-    y -= 70
+    y -= 22
+    if (snapshot.notes) { section('DADOS DO PAGAMENTO E OBSERVACOES'); paragraph(snapshot.notes); y -= 10 }
+    y -= 38
     line()
     y -= 17
     text(`${issuer.name || 'Codexa'} · Responsavel pelo recebimento`, 80, 8)
@@ -161,10 +191,10 @@ export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<U
     y -= 17
     text(`Data: ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(new Date(snapshot.issued_at ?? Date.now()))}   Validade: ${snapshot.due_date ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeZone: 'UTC' }).format(new Date(`${snapshot.due_date}T12:00:00Z`)) : 'Nao informada'}`, 52, 9)
     y -= 25
-    if (snapshot.description) { section('APRESENTACAO') ; text(snapshot.description, 52, 9, regular, ink, 150); y -= 26 }
+    if (snapshot.description) { section('APRESENTACAO'); paragraph(snapshot.description); y -= 8 }
     section('ITENS DA PROPOSTA')
     drawItems(true)
-    if (snapshot.notes) { section('CONDICOES E OBSERVACOES COMERCIAIS'); text(snapshot.notes, 52, 9, regular, ink, 150); y -= 26 }
+    if (snapshot.notes) { section('CONDICOES E OBSERVACOES COMERCIAIS'); paragraph(snapshot.notes); y -= 8 }
     if (y < 110) addPage(true)
     y -= 30
     line(primary); y -= 16; text('Codexa · Proponente', 115, 8)
@@ -176,7 +206,7 @@ export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<U
     text(`Origem: ${snapshot.title}`, 52, 9, bold)
     y -= 17
     if (snapshot.project?.name) { text(`Projeto: ${snapshot.project.name}`, 52, 9); y -= 16 }
-    if (snapshot.description) { text(snapshot.description, 52, 9, regular, ink, 150); y -= 25 }
+    if (snapshot.description) { paragraph(snapshot.description); y -= 8 }
     section('ITENS COBRADOS')
     drawItems(false)
     page.drawRectangle({ x: 44, y: y - 39, width: 507, height: 57, color: primary })
@@ -185,7 +215,7 @@ export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<U
     y -= 75
     text(`Vencimento: ${snapshot.due_date ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(`${snapshot.due_date}T12:00:00Z`)) : 'Nao informado'}`, 44, 10, bold)
     y -= 28
-    if (snapshot.notes) { section('INSTRUCOES DE PAGAMENTO'); text(snapshot.notes, 52, 9, regular, ink, 150); y -= 28 }
+    if (snapshot.notes) { section('INSTRUCOES DE PAGAMENTO'); paragraph(snapshot.notes); y -= 8 }
     text('Documento comercial de cobranca — nao e nota fiscal e nao confirma pagamento.', 44, 8, bold, secondary, 110)
   } else if (isServiceOrder) {
     section('IDENTIFICACAO DA ORDEM')
@@ -196,8 +226,8 @@ export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<U
     text(`Abertura: ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(new Date(snapshot.issued_at ?? Date.now()))}   Situacao: Emitida`, 52, 9)
     y -= 26
     section('SOLICITACAO / DIAGNOSTICO')
-    text(snapshot.description || snapshot.title, 52, 9, regular, ink, 150)
-    y -= 28
+    paragraph(snapshot.description || snapshot.title)
+    y -= 8
     section('ATIVIDADES / RECURSOS PREVISTOS')
     for (const [index, item] of lines.entries()) {
       if (y < 100) addPage(true)
@@ -205,7 +235,7 @@ export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<U
       right(`Qtd. ${Number(item.quantity) || 0}`, 543, 8, regular, secondary)
       y -= 22
     }
-    if (snapshot.notes) { section('OBSERVACOES TECNICAS / CONDICOES'); text(snapshot.notes, 52, 9, regular, ink, 150); y -= 26 }
+    if (snapshot.notes) { section('OBSERVACOES TECNICAS / CONDICOES'); paragraph(snapshot.notes); y -= 8 }
     y -= 5
     text(`Total estimado: ${money(Number(snapshot.total_cents) || 0)}`, 44, 10, bold, primary)
     y -= 18
@@ -216,7 +246,7 @@ export async function createCommercialDocumentPdf(snapshot: Snapshot): Promise<U
   } else {
     text(safeText(snapshot.title, 120), 44, 18, bold, primary)
     y -= 30
-    if (snapshot.description) { text(snapshot.description, 44, 9, regular, secondary, 150); y -= 25 }
+    if (snapshot.description) { paragraph(snapshot.description, 44, 9, regular, secondary, 507, 13); y -= 8 }
     text(`Cliente: ${client.name || client.legal_name || 'Nao informado'}`, 44, 9, bold)
     y -= 18
     drawItems(true)
