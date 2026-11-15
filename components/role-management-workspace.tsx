@@ -82,6 +82,9 @@ const actionLabels: Record<string, string> = {
   view_audit: 'Consultar auditoria',
   generate_contact_codes: 'Gerar códigos de cliente',
   revoke_contact_codes: 'Revogar códigos de cliente',
+  signature_upload: 'Enviar PDF para assinatura', signature_prepare: 'Preparar campos de assinatura',
+  signature_sign: 'Assinar documentos', signature_evidence: 'Consultar evidências de assinatura',
+  signature_cancel: 'Cancelar processos de assinatura',
 }
 
 const adminOnlyPermissionKeys = new Set(['clients:generate_contact_codes', 'clients:revoke_contact_codes'])
