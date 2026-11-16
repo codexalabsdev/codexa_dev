@@ -11,6 +11,7 @@ type Props = {
   pageNumber: number
   position: SignaturePosition
   suggestion: SuggestedPosition | null
+  signaturePreview: string
   canMove: boolean
   onPositionChange: (position: SignaturePosition) => void
   onSuggestion: (position: SuggestedPosition | null) => void
@@ -40,7 +41,10 @@ function findSuggestedPosition(textBoxes: Array<{ left: number; top: number; rig
   return { page_number: pageNumber, x_percent: best.x_percent, y_percent: best.y_percent, width_percent: widthPercent, height_percent: heightPercent }
 }
 
-export function SignaturePdfPreview({ url, pageNumber, position, suggestion, canMove, onPositionChange, onSuggestion }: Props) {
+export function SignaturePdfPreview({ url, pageNumber, position,   suggestion,
+  signaturePreview,
+  canMove,
+  onPositionChange, onSuggestion }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const dragOffset = useRef<{ x: number; y: number } | null>(null)
@@ -188,8 +192,8 @@ export function SignaturePdfPreview({ url, pageNumber, position, suggestion, can
     <div ref={containerRef} className="relative mx-auto w-full max-w-[840px] overflow-hidden rounded-lg border border-slate-300 bg-white shadow-xl">
       <canvas ref={canvasRef} aria-label={`Página ${pageNumber} do documento`} className="block h-auto w-full" />
       {pdf && canMove && suggestion?.page_number === pageNumber && <div aria-hidden="true" className="pointer-events-none absolute rounded-md border-2 border-dashed border-violet-600 bg-violet-300/20" style={{ left: `${suggestion.x_percent}%`, top: `${suggestion.y_percent}%`, width: `${suggestion.width_percent}%`, height: `${suggestion.height_percent}%` }}><span className="absolute -top-5 left-0 rounded bg-violet-700 px-1.5 py-0.5 text-[10px] font-semibold text-white">Sugestão</span></div>}
-      {pdf && canMove && <button type="button" aria-label="Campo de assinatura. Arraste para mover ou use as setas do teclado." title="Arraste para reposicionar · use as setas do teclado para mover com precisão" onPointerDown={startMove} onPointerMove={move} onPointerUp={stopMove} onPointerCancel={stopMove} onKeyDown={moveWithKeyboard} className="absolute touch-none cursor-move select-none rounded-md border-2 border-cyan-600 bg-cyan-200/55 px-2 text-left text-[clamp(9px,1.2vw,13px)] font-semibold text-cyan-950 shadow-[0_1px_8px_rgba(8,145,178,.3)] outline-none focus-visible:ring-2 focus-visible:ring-cyan-500" style={markerStyle}><span aria-hidden="true">Assinatura · mover</span></button>}
-      {pdf && !canMove && <div role="img" aria-label="Campo de assinatura no documento" className="pointer-events-none absolute rounded-md border-2 border-cyan-600 bg-cyan-200/55" style={markerStyle} />}
+      {pdf && canMove && <button type="button" aria-label="Campo de assinatura. Arraste para mover ou use as setas do teclado." title="Arraste para reposicionar · use as setas do teclado para mover com precisão" onPointerDown={startMove} onPointerMove={move} onPointerUp={stopMove} onPointerCancel={stopMove} onKeyDown={moveWithKeyboard} className="absolute touch-none cursor-move select-none overflow-hidden rounded-md border-2 border-cyan-600 bg-cyan-200/55 text-left text-[clamp(9px,1.2vw,13px)] font-semibold text-cyan-950 shadow-[0_1px_8px_rgba(8,145,178,.3)] outline-none focus-visible:ring-2 focus-visible:ring-cyan-500" style={markerStyle}>{signaturePreview ? <img src={signaturePreview} alt="Prévia da assinatura neste campo" className="pointer-events-none size-full object-contain" /> : <span className="px-2" aria-hidden="true">Assinatura · mover</span>}</button>}
+      {pdf && !canMove && <div role="img" aria-label={signaturePreview ? 'Prévia da assinatura no documento' : 'Campo de assinatura no documento'} className="pointer-events-none absolute overflow-hidden rounded-md border-2 border-cyan-600 bg-cyan-200/55" style={markerStyle}>{signaturePreview && <img src={signaturePreview} alt="" className="size-full object-contain" />}</div>}
     </div>
   </div>
 }

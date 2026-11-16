@@ -35,11 +35,14 @@ export async function GET() {
       : { data: [], error: null }
     if (libraryResult.error) throw new AdminApiError('Não foi possível carregar os PDFs da biblioteca.', 503)
     const ids = (processes ?? []).map((process) => process.id)
-    const { data: signers, error: signerError } = ids.length
-      ? await actor.supabase.from('document_signers').select('id,process_id,full_name,email,status,signed_at,signing_order').in('process_id', ids)
-      : { data: [], error: null }
-    if (signerError) throw new AdminApiError('Não foi possível carregar os signatários.', 503)
-    return NextResponse.json({ processes: (processes ?? []).map((process) => ({ ...process, signers: (signers ?? []).filter((signer) => signer.process_id === process.id) })), libraryDocuments: libraryResult.data ?? [] }, { headers: { 'Cache-Control': 'private, no-store' } })
+    const [{ data: signers, error: signerError }, { data: events, error: eventError }] = ids.length
+      ? await Promise.all([
+          actor.supabase.from('document_signers').select('id,process_id,full_name,email,status,signed_at,signing_order').in('process_id', ids),
+          actor.supabase.from('document_signing_events').select('process_id,event_data').in('process_id', ids),
+        ])
+      : [{ data: [], error: null }, { data: [], error: null }]
+    if (signerError || eventError) throw new AdminApiError('Não foi possível carregar os dados dos processos.', 503)
+    return NextResponse.json({ processes: (processes ?? []).map((process) => ({ ...process, signed_file_deleted: (events ?? []).some((event) => event.process_id === process.id && event.event_data?.action === 'signed_file_deleted'), signers: (signers ?? []).filter((signer) => signer.process_id === process.id) })), libraryDocuments: libraryResult.data ?? [] }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) { return fail(error) }
 }
 
