@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AlertTriangle, CircleDollarSign, Download, Eye, Pencil, Plus, RefreshCw, Search, Trash2, TrendingDown, TrendingUp, WalletCards, X } from 'lucide-react'
+import { FinanceCashflowChart, FinanceCategoryChart } from '@/components/finance-cashflow-chart'
 import { createClient } from '@/lib/supabase/client'
 import { ListingControls } from '@/components/listing-controls'
 
@@ -29,6 +30,7 @@ type Payable = {
 }
 
 type FinanceRecord = Receivable | Payable
+type PaymentEvent = { id: string; account_type: 'receivable' | 'payable'; account_id: string; amount: number; payment_date: string; payment_method: string | null; notes: string | null; created_at: string }
 type RecurringSchedule = { id: string; description: string; kind: 'receita' | 'despesa'; amount: number; category: string; beneficiary: string | null; frequency: string; anchor_day: number; first_due_date: string; end_date: string | null; status: 'active' | 'paused' | 'ended'; next_due_date: string; last_generated_date: string | null }
 
 type RangeOption = '30d' | '90d' | 'all'
@@ -100,15 +102,19 @@ function getStatusOptions(item: Receivable | Payable) {
   return options
 }
 
+function localDateInput() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
 function withinRange(dateValue: string | null | undefined, range: RangeOption) {
   if (!dateValue || range === 'all') return true
   const date = new Date(`${dateValue.slice(0, 10)}T12:00:00`)
-  const now = new Date()
-  const offset = range === '30d' ? 30 : 90
-  const from = new Date(now)
-  from.setDate(now.getDate() - offset)
-  const to = new Date(now)
-  to.setDate(now.getDate() + offset)
+  const from = new Date()
+  from.setHours(0, 0, 0, 0)
+  from.setDate(from.getDate() - (range === '30d' ? 30 : 90))
+  const to = new Date()
+  to.setHours(23, 59, 59, 999)
   return date >= from && date <= to
 }
 
@@ -117,6 +123,10 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
   const [receivables, setReceivables] = useState<Receivable[]>([])
   const [payables, setPayables] = useState<Payable[]>([])
   const [recurringSchedules, setRecurringSchedules] = useState<RecurringSchedule[]>([])
+  const [paymentEvents, setPaymentEvents] = useState<PaymentEvent[]>([])
+  const [paymentTableMissing, setPaymentTableMissing] = useState(false)
+  const [showPaymentForm, setShowPaymentForm] = useState(false)
+  const [paymentForm, setPaymentForm] = useState({ amount: '', payment_date: localDateInput(), payment_method: 'Transferência', notes: '' })
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(0)
   const [rangeFilter, setRangeFilter] = useState<RangeOption>('30d')
@@ -139,11 +149,15 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
   const supabase = createClient()
   const { error: generationError } = await supabase.rpc('generate_financial_recurring_cycles', { p_until: new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10) })
   if (generationError) setMessage(`Não foi possível gerar recorrências: ${generationError.message}`)
-  const [receivableResult, payableResult, recurringResult] = await Promise.all([
+  const [receivableResult, payableResult, recurringResult, paymentResult] = await Promise.all([
       supabase.from('accounts_receivable').select('id,description,category,original_amount,final_amount,paid_amount,due_date,status,created_at,recurring_schedule_id,recurring_cycle_key').order('due_date'),
       supabase.from('accounts_payable').select('id,beneficiary,description,amount,paid_amount,due_date,status,created_at,recurring_schedule_id,recurring_cycle_key').order('due_date'),
       supabase.from('financial_recurring_schedules').select('id,description,kind,amount,category,beneficiary,frequency,anchor_day,first_due_date,end_date,status,next_due_date,last_generated_date').order('next_due_date'),
+      supabase.from('finance_payment_events').select('id,account_type,account_id,amount,payment_date,payment_method,notes,created_at').order('payment_date', { ascending: false }),
     ])
+    const missingPaymentTable = paymentResult.error?.code === '42P01' || paymentResult.error?.code === 'PGRST205'
+    setPaymentTableMissing(Boolean(missingPaymentTable))
+    if (paymentResult.error && !missingPaymentTable) setMessage(`Não foi possível carregar o histórico de pagamentos: ${paymentResult.error.message}`)
     if (receivableResult.error || payableResult.error || recurringResult.error) {
       const loadError = receivableResult.error || payableResult.error || recurringResult.error
       setMessage(`Não foi possível carregar lançamentos: ${loadError.message}`)
@@ -151,6 +165,7 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
     setReceivables((receivableResult.data ?? []) as Receivable[])
     setPayables((payableResult.data ?? []) as Payable[])
     setRecurringSchedules((recurringResult.data ?? []) as RecurringSchedule[])
+    setPaymentEvents((paymentResult.data ?? []) as PaymentEvent[])
     setLoading(false)
   }
 
@@ -174,6 +189,38 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
     const { error: insertError } = await supabase.from(table).insert(payload)
     if (insertError) setMessage(`Não foi possível salvar o lançamento: ${insertError.message}`)
     else { setMessage('Lançamento criado.'); setShowForm(false); setForm({ description: '', amount: '', due_date: '' }); await load() }
+    setSaving(false)
+  }
+
+  async function recordPayment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!record || !canUpdate || paymentTableMissing) return
+    const amount = Number(paymentForm.amount)
+    const openBalance = getOpenBalance(record)
+    if (!Number.isFinite(amount) || amount <= 0 || amount > openBalance || !paymentForm.payment_date || paymentForm.payment_date > localDateInput()) {
+      setMessage('Informe um valor positivo dentro do saldo e uma data de pagamento válida.')
+      return
+    }
+    setSaving(true)
+    setMessage('')
+    const { error } = await createClient().rpc('record_finance_payment', {
+      p_account_type: 'beneficiary' in record ? 'payable' : 'receivable',
+      p_account_id: record.id,
+      p_amount: amount,
+      p_payment_date: paymentForm.payment_date,
+      p_payment_method: paymentForm.payment_method,
+      p_notes: paymentForm.notes.trim() || null,
+    })
+    if (error) setMessage(`Não foi possível registrar o pagamento: ${error.message}`)
+    else {
+      const nextPaid = Number(record.paid_amount || 0) + amount
+      const fullySettled = nextPaid >= getRecordTotal(record)
+      setRecord({ ...record, paid_amount: nextPaid, status: fullySettled ? getSettlementStatus(record) : ('beneficiary' in record ? 'Parcialmente paga' : 'Parcialmente recebida') } as FinanceRecord)
+      setPaymentForm({ amount: '', payment_date: localDateInput(), payment_method: 'Transferência', notes: '' })
+      setShowPaymentForm(false)
+      setMessage('Pagamento registrado e saldo atualizado.')
+      await load()
+    }
     setSaving(false)
   }
 
@@ -310,18 +357,19 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
   const overduePayables = payables.filter(isOverdue).reduce((sum, item) => sum + getOpenBalance(item), 0)
   const netCash = outstandingReceivables - outstandingPayables
 
-  const periodReceivables = filteredReceivables.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0)
-  const periodPayables = filteredPayables.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0)
+  const periodReceivables = paymentEvents.filter((item) => item.account_type === 'receivable' && withinRange(item.payment_date, rangeFilter)).reduce((sum, item) => sum + Number(item.amount || 0), 0)
+  const periodPayables = paymentEvents.filter((item) => item.account_type === 'payable' && withinRange(item.payment_date, rangeFilter)).reduce((sum, item) => sum + Number(item.amount || 0), 0)
 
   const topCategories = useMemo(() => {
-    const combined = [...filteredReceivables.map((item) => ({ label: item.category || 'Sem categoria', value: getOpenBalance(item) })), ...filteredPayables.map((item) => ({ label: item.description || 'Sem descrição', value: getOpenBalance(item) }))]
+    const combined = [...filteredReceivables.map((item) => ({ label: item.category || 'Sem categoria', value: getOpenBalance(item) }))]
+    const payableBalance = filteredPayables.reduce((sum, item) => sum + getOpenBalance(item), 0)
+    if (payableBalance > 0) combined.push({ label: 'Contas a pagar', value: payableBalance })
     const summary = combined.reduce<Record<string, number>>((accumulator, item) => {
       accumulator[item.label] = (accumulator[item.label] ?? 0) + item.value
       return accumulator
     }, {})
     return Object.entries(summary).sort((a, b) => b[1] - a[1]).slice(0, 5)
   }, [filteredReceivables, filteredPayables])
-  const maxCategoryValue = Math.max(...topCategories.map(([, value]) => value), 1)
 
   const alerts = useMemo(() => {
     const receivableAlerts = filteredReceivables.filter(isOverdue).slice(0, 3).map((item) => ({
@@ -348,31 +396,24 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
       const key = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`
       monthEntries.set(key, {
         key,
-        label: new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(monthDate),
+        label: new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit' }).format(monthDate),
         inflow: 0,
         outflow: 0,
       })
     }
 
-    ;[...receivables, ...payables].forEach((item) => {
-      const dateValue = item.due_date ?? item.created_at
-      if (!dateValue) return
-      const monthDate = new Date(`${dateValue.slice(0, 10)}T12:00:00`)
+    paymentEvents.forEach((payment) => {
+      const monthDate = new Date(`${payment.payment_date.slice(0, 10)}T12:00:00`)
       const key = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`
-      if (!monthEntries.has(key)) return
-
-      const entry = monthEntries.get(key)!
-      if ('beneficiary' in item) {
-        entry.outflow += Number(item.paid_amount || 0)
-      } else {
-        entry.inflow += Number(item.paid_amount || 0)
-      }
+      const entry = monthEntries.get(key)
+      if (!entry) return
+      if (payment.account_type === 'payable') entry.outflow += Number(payment.amount || 0)
+      else entry.inflow += Number(payment.amount || 0)
     })
 
     return Array.from(monthEntries.values())
-  }, [receivables, payables])
+  }, [paymentEvents])
 
-  const maxCashflowValue = Math.max(...cashflowSeries.flatMap((item) => [item.inflow, item.outflow]), 1)
   const totalInflow = cashflowSeries.reduce((sum, item) => sum + item.inflow, 0)
   const totalOutflow = cashflowSeries.reduce((sum, item) => sum + item.outflow, 0)
   const netCashflow = totalInflow - totalOutflow
@@ -440,6 +481,7 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
     </div>
 
     {message && <p role="status" className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-xs text-blue-300">{message}</p>}
+    {paymentTableMissing && <p role="status" className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">O histórico detalhado está pendente. Para habilitar registro e datas reais de pagamento, aplique manualmente o arquivo <code>supabase/manual/finance_payment_events.sql</code> no Supabase SQL Editor.</p>}
 
     {showForm && <form onSubmit={(event) => void createEntry(event)} className="grid gap-3 rounded-xl border border-white/[0.08] bg-[#11161e] p-5 sm:grid-cols-[1fr_160px_170px_auto]"><input required value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Descrição" className={inputClass} /><input required min="0.01" step="0.01" type="number" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} placeholder="Valor" className={inputClass} /><input required type="date" value={form.due_date} onChange={(event) => setForm({ ...form, due_date: event.target.value })} className={inputClass} /><button disabled={saving} className="rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60">{saving ? 'Salvando...' : 'Salvar'}</button></form>}
 
@@ -460,7 +502,7 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
         <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="rounded-xl border border-white/[0.07] bg-[#11161e] p-5">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-slate-200">Resumo operacional</h2>
+              <h2 className="text-sm font-semibold text-slate-200">Saldo em aberto por categoria</h2>
               <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Periodo: {rangeFilter === '30d' ? '30 dias' : rangeFilter === '90d' ? '90 dias' : 'completo'}</span>
             </div>
 
@@ -475,20 +517,8 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
               </div>
             </div>
 
-            <div className="mt-5 space-y-3">
-              {topCategories.length === 0 ? (
-                <p className="text-xs text-slate-500">Ainda não há dados suficientes para distribuir por categoria.</p>
-              ) : topCategories.map(([label, value]) => (
-                <div key={label}>
-                  <div className="mb-1 flex justify-between gap-2 text-[11px] text-slate-400">
-                    <span>{label}</span>
-                    <span>{money(value)}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-white/[0.05]">
-                    <div className="h-2 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500" style={{ width: `${Math.min((value / maxCategoryValue) * 100, 100)}%` }} />
-                  </div>
-                </div>
-              ))}
+            <div className="mt-5">
+              {topCategories.length === 0 ? <p className="text-xs text-slate-500">Ainda não há saldos em aberto para comparar.</p> : <FinanceCategoryChart data={topCategories.map(([label, amount]) => ({ label, amount }))} />}
             </div>
           </div>
 
@@ -531,23 +561,9 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
           </div>
         </div>
 
-        <div className="mt-5 space-y-3">
-          {cashflowSeries.map((item) => (
-            <div key={item.key}>
-              <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-slate-400">
-                <span className="capitalize">{item.label}</span>
-                <span>{money(item.inflow - item.outflow)}</span>
-              </div>
-              <div className="flex h-3 overflow-hidden rounded-full bg-white/[0.05]">
-                <div className="bg-gradient-to-r from-emerald-500 to-emerald-400" style={{ width: `${Math.min((item.inflow / maxCashflowValue) * 100, 100)}%` }} />
-                <div className="bg-gradient-to-r from-rose-500 to-rose-400" style={{ width: `${Math.min((item.outflow / maxCashflowValue) * 100, 100)}%` }} />
-              </div>
-              <div className="mt-2 flex justify-between text-[10px] text-slate-500">
-                <span>Entradas: {money(item.inflow)}</span>
-                <span>Saídas: {money(item.outflow)}</span>
-              </div>
-            </div>
-          ))}
+        <div className="mt-5">
+          {totalInflow + totalOutflow === 0 && !paymentTableMissing && <p className="mb-3 text-xs text-slate-500">Nenhum pagamento registrado nos últimos seis meses.</p>}
+          <FinanceCashflowChart data={cashflowSeries} />
         </div>
       </div>
 
@@ -555,7 +571,7 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
         <h2 className="text-sm font-semibold text-slate-200">Resumo rápido</h2>
         <div className="mt-4 space-y-3">
           <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Expectativa líquida</p>
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Saldo realizado (6 meses)</p>
             <p className="mt-2 text-lg font-semibold text-white">{money(netCashflow)}</p>
           </div>
           <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
@@ -645,7 +661,7 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
       <div className="rounded-xl border border-white/[0.07] bg-[#11161e] p-5">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-semibold text-slate-200">Planejamento orçamentário</h2>
-          <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500">base atual</span>
+              <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500">estimativas sobre compromissos em aberto</span>
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -687,7 +703,7 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
       </div>
 
       <div className="rounded-xl border border-white/[0.07] bg-[#11161e] p-5">
-        <h2 className="text-sm font-semibold text-slate-200">Desvio orçamentário</h2>
+        <h2 className="text-sm font-semibold text-slate-200">Projeção orçamentária estimada</h2>
         <div className="mt-4 space-y-3">
           <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
             <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Variação prevista</p>
@@ -735,7 +751,7 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
                   {canUpdate && <select aria-label={`Alterar status de ${item.description}`} disabled={saving} value={getSelectedStatus(item)} onChange={(event) => void updateRecordStatus(item, event.target.value)} className={`${inputClass} w-auto min-w-[136px] py-2 text-xs disabled:opacity-50`}>
                     {getStatusOptions(item).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>}
-                  <button onClick={() => { setRecord(item); setEditingRecord(false); setMessage('') }} aria-label={`Ver detalhes de ${item.description}`} className="rounded p-2 text-slate-400 hover:bg-white/5 hover:text-white"><Eye className="size-4" /></button>
+                  <button onClick={() => { setRecord(item); setEditingRecord(false); setShowPaymentForm(false); setMessage('') }} aria-label={`Ver detalhes de ${item.description}`} className="rounded p-2 text-slate-400 hover:bg-white/5 hover:text-white"><Eye className="size-4" /></button>
                   {canUpdate && <button onClick={() => { setRecord(item); setEditingRecord(true); setMessage('') }} aria-label={`Editar lançamento ${item.description}`} className="rounded p-2 text-slate-400 hover:bg-white/5 hover:text-white"><Pencil className="size-4" /></button>}
                   {canDelete && <button onClick={() => void deleteRecord(item)} aria-label={`Excluir lançamento ${item.description}`} className="rounded p-2 text-slate-500 hover:bg-rose-500/10 hover:text-rose-300"><Trash2 className="size-4" /></button>}
                 </div>
@@ -759,7 +775,7 @@ export function FinanceWorkspace({ initialTab = 'overview', permissions = [] }: 
         <label className="text-xs text-slate-400">Valor<input name="amount" type="number" min="0.01" step="0.01" required disabled={record.paid_amount > 0} defaultValue={'amount' in record ? record.amount : record.final_amount} className={`${inputClass} mt-1 disabled:opacity-50`} /></label>
         {record.paid_amount > 0 && <p className="text-xs text-amber-300">O valor não pode ser alterado após a existência de pagamentos registrados.</p>}
         <div className="flex justify-end gap-2"><button type="button" onClick={() => setEditingRecord(false)} className="rounded-lg px-3 py-2 text-xs text-slate-300">Cancelar</button><button disabled={saving} className="rounded-lg bg-blue-500 px-4 py-2 text-xs font-semibold text-white">{saving ? 'Salvando...' : 'Salvar alterações'}</button></div>
-      </form> : <><div className="grid gap-4 text-sm sm:grid-cols-2"><p className="text-slate-400">Valor<span className="mt-1 block text-slate-200">{money('amount' in record ? record.amount : record.final_amount)}</span></p><p className="text-slate-400">Pago<span className="mt-1 block text-slate-200">{money(record.paid_amount)}</span></p><p className="text-slate-400">Vencimento<span className="mt-1 block text-slate-200">{record.due_date ? new Date(`${record.due_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : 'Não informado'}</span></p><p className="text-slate-400">Status<span className="mt-1 block text-slate-200">{getStatusLabel(record)}</span></p><p className="text-slate-400 sm:col-span-2">{'beneficiary' in record ? 'Beneficiário' : 'Categoria'}<span className="mt-1 block text-slate-200">{'beneficiary' in record ? record.beneficiary : record.category}</span></p></div><div className="mt-5 flex justify-end gap-2"><button onClick={() => setRecord(null)} className="rounded-lg px-3 py-2 text-xs text-slate-300">Fechar</button>{canUpdate && <button onClick={() => setEditingRecord(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-2 text-xs font-semibold text-white"><Pencil className="size-3.5" />Editar</button>}</div></>}
+      </form> : <><div className="grid gap-4 text-sm sm:grid-cols-2"><p className="text-slate-400">Valor<span className="mt-1 block text-slate-200">{money('amount' in record ? record.amount : record.final_amount)}</span></p><p className="text-slate-400">Pago<span className="mt-1 block text-slate-200">{money(record.paid_amount)}</span></p><p className="text-slate-400">Saldo em aberto<span className="mt-1 block text-slate-200">{money(getOpenBalance(record))}</span></p><p className="text-slate-400">Vencimento<span className="mt-1 block text-slate-200">{record.due_date ? new Date(`${record.due_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : 'Não informado'}</span></p><p className="text-slate-400">Status<span className="mt-1 block text-slate-200">{getStatusLabel(record)}</span></p><p className="text-slate-400 sm:col-span-2">{'beneficiary' in record ? 'Beneficiário' : 'Categoria'}<span className="mt-1 block text-slate-200">{'beneficiary' in record ? record.beneficiary : record.category}</span></p></div><div className="mt-5 border-t border-white/[0.08] pt-4"><div className="flex items-center justify-between gap-3"><h4 className="text-xs font-semibold text-slate-200">Histórico de pagamentos</h4>{canUpdate && getOpenBalance(record) > 0 && <button disabled={paymentTableMissing} onClick={() => setShowPaymentForm((value) => !value)} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"><CircleDollarSign className="size-4" />Registrar pagamento</button>}</div>{showPaymentForm && <form onSubmit={(event) => void recordPayment(event)} className="mt-4 grid gap-3 rounded-lg border border-white/[0.08] bg-white/[0.02] p-3 sm:grid-cols-2"><label className="text-xs text-slate-400">Valor pago<input required type="number" min="0.01" max={getOpenBalance(record)} step="0.01" value={paymentForm.amount} onChange={(event) => setPaymentForm({ ...paymentForm, amount: event.target.value })} className={`${inputClass} mt-1`} /></label><label className="text-xs text-slate-400">Data do pagamento<input required type="date" max={localDateInput()} value={paymentForm.payment_date} onChange={(event) => setPaymentForm({ ...paymentForm, payment_date: event.target.value })} className={`${inputClass} mt-1`} /></label><label className="text-xs text-slate-400">Forma de pagamento<select value={paymentForm.payment_method} onChange={(event) => setPaymentForm({ ...paymentForm, payment_method: event.target.value })} className={`${inputClass} mt-1`}><option>Transferência</option><option>PIX</option><option>Boleto</option><option>Cartão</option><option>Dinheiro</option><option>Outro</option></select></label><label className="text-xs text-slate-400">Observação<input maxLength={500} value={paymentForm.notes} onChange={(event) => setPaymentForm({ ...paymentForm, notes: event.target.value })} className={`${inputClass} mt-1`} /></label><div className="flex justify-end gap-2 sm:col-span-2"><button type="button" onClick={() => setShowPaymentForm(false)} className="rounded-lg px-3 py-2 text-xs text-slate-300">Cancelar</button><button disabled={saving || paymentTableMissing} className="rounded-lg bg-emerald-500 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{saving ? 'Registrando...' : 'Confirmar pagamento'}</button></div></form>}<div className="mt-3 divide-y divide-white/[0.06]">{paymentEvents.filter((payment) => payment.account_id === record.id && payment.account_type === ('beneficiary' in record ? 'payable' : 'receivable')).length === 0 ? <p className="py-3 text-xs text-slate-500">{paymentTableMissing ? 'O histórico ficará disponível após a aplicação do SQL pendente.' : 'Nenhum pagamento detalhado registrado.'}</p> : paymentEvents.filter((payment) => payment.account_id === record.id && payment.account_type === ('beneficiary' in record ? 'payable' : 'receivable')).map((payment) => <div key={payment.id} className="flex items-start justify-between gap-3 py-3 text-xs"><div><p className="font-medium text-slate-200">{payment.payment_method || 'Pagamento'}{payment.notes ? ` · ${payment.notes}` : ''}</p><p className="mt-1 text-slate-500">{new Date(`${payment.payment_date}T12:00:00`).toLocaleDateString('pt-BR')}</p></div><span className="font-semibold text-emerald-300">{money(payment.amount)}</span></div>)}</div></div><div className="mt-5 flex justify-end gap-2"><button onClick={() => setRecord(null)} className="rounded-lg px-3 py-2 text-xs text-slate-300">Fechar</button>{canUpdate && <button onClick={() => setEditingRecord(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-2 text-xs font-semibold text-white"><Pencil className="size-3.5" />Editar</button>}</div></>}
     </div></div>}
   </section>
 }
