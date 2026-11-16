@@ -13,6 +13,29 @@
   --workspace-border: var(--border-strong);
 }
 
+[data-focus='strong'] .workspace-shell :focus-visible {
+  outline-width: 3px;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 2px var(--workspace-background);
+}
+
+.workspace-shell [class~='text-xs'] { font-size: calc(0.75rem * var(--font-scale, 1)); }
+.workspace-shell [class~='text-sm'] { font-size: calc(0.875rem * var(--font-scale, 1)); }
+.workspace-shell [class~='text-base'] { font-size: calc(1rem * var(--font-scale, 1)); }
+.workspace-shell [class~='text-lg'] { font-size: calc(1.125rem * var(--font-scale, 1)); }
+.workspace-shell [class~='text-xl'] { font-size: calc(1.25rem * var(--font-scale, 1)); }
+.workspace-shell [class~='text-2xl'] { font-size: calc(1.5rem * var(--font-scale, 1) * var(--heading-scale, 1)); }
+.workspace-shell [class~='text-3xl'] { font-size: calc(1.875rem * var(--font-scale, 1) * var(--heading-scale, 1)); }
+.workspace-shell [class~='text-4xl'] { font-size: calc(2.25rem * var(--font-scale, 1) * var(--heading-scale, 1)); }
+.workspace-shell :is([class~='text-xs'], [class~='text-sm'], [class~='text-base'], [class~='text-lg'], [class~='text-xl'], [class~='text-2xl'], [class~='text-3xl'], [class~='text-4xl']) { line-height: var(--line-height-base, 1.5); }
+
+.workspace-shell table tbody td,
+.workspace-shell table tbody th { padding-block: 0.75rem; }
+[data-density='compact'] .workspace-shell table tbody td,
+[data-density='compact'] .workspace-shell table tbody th { padding-block: 0.4rem; }
+[data-density='spacious'] .workspace-shell table tbody td,
+[data-density='spacious'] .workspace-shell table tbody th { padding-block: 1.1rem; }
+
 [data-motion='reduced'] .workspace-shell *,
 [data-motion='reduced'] .workspace-shell *::before,
 [data-motion='reduced'] .workspace-shell *::after {

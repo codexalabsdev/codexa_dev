@@ -3,6 +3,7 @@ export type FontFamily = 'inter' | 'roboto' | 'open-sans' | 'lato' | 'montserrat
 export type RadiusScale = 'small' | 'medium' | 'large'
 export type ContrastMode = 'normal' | 'high'
 export type MotionMode = 'full' | 'reduced'
+export type FocusMode = 'standard' | 'strong'
 
 export type WorkspaceAppearance = {
   theme: WorkspaceTheme
@@ -29,8 +30,9 @@ export type WorkspaceAppearance = {
   radius_scale: RadiusScale
   contrast_mode: ContrastMode
   motion_mode: MotionMode
+  focus_mode?: FocusMode
   navigation_collapsed?: boolean
-  table_density?: 'comfortable' | 'compact'
+  table_density?: 'comfortable' | 'compact' | 'spacious'
 }
 
 const legacyAccentColors: Record<string, string> = {
@@ -75,6 +77,8 @@ const defaultAppearance: WorkspaceAppearance = {
   radius_scale: 'medium',
   contrast_mode: 'normal',
   motion_mode: 'full',
+  focus_mode: 'standard',
+  table_density: 'comfortable',
 }
 
 export function getDefaultWorkspaceAppearance(): WorkspaceAppearance {
@@ -171,6 +175,7 @@ export function applyWorkspaceAppearance(appearance: WorkspaceAppearance): void 
   }
   root.style.setProperty('--workspace-font-family', fontFamilies[appearance.font_family] ?? fontFamilies.inter)
   root.style.setProperty('--font-size-base', `${appearance.font_size_base}px`)
+  root.style.setProperty('--font-scale', String(appearance.font_size_base / 16))
   root.style.setProperty('--heading-scale', String(appearance.heading_scale))
   root.style.setProperty('--font-weight-base', String(appearance.font_weight))
   root.style.setProperty('--line-height-base', String(appearance.line_height))
@@ -206,6 +211,8 @@ export function applyWorkspaceAppearance(appearance: WorkspaceAppearance): void 
   root.dataset.radius = appearance.radius_scale
   root.dataset.contrast = appearance.contrast_mode
   root.dataset.motion = appearance.motion_mode
+  root.dataset.focus = appearance.focus_mode ?? 'standard'
+  root.dataset.density = appearance.table_density ?? 'comfortable'
 }
 
 export function getWorkspaceThemePreference(): WorkspaceTheme {
